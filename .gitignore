@@ -16,6 +16,10 @@ wp-config.php
 wp-content/themes/twentytwenty*
 wp-content/themes/twenty*
 
+# Allow themes directory structure
+!wp-content/themes/
+!wp-content/themes/index.php
+
 # Exclude default plugins and languages (already on Lightsail)
 wp-content/plugins/
 wp-content/languages/
