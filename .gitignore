@@ -2,8 +2,9 @@
 # We're tracking WordPress core for deployment
 
 # WordPress Configuration
-# Note: wp-config.php is tracked but should have sensitive data in environment variables
-# wp-config.php
+# Note: wp-config.php contains sensitive data and should use environment variables
+wp-config.php
+.htaccess
 
 # WordPress Uploads
 wp-content/uploads/
