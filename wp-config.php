@@ -15,24 +15,57 @@
  * @package WordPress
  */
 
+// Load environment variables from .env file if it exists
+if ( file_exists( __DIR__ . '/.env' ) ) {
+	$env_file = file( __DIR__ . '/.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES );
+	foreach ( $env_file as $line ) {
+		// Skip comments
+		if ( strpos( trim( $line ), '#' ) === 0 ) {
+			continue;
+		}
+		// Parse KEY=VALUE format
+		if ( strpos( $line, '=' ) !== false ) {
+			list( $key, $value ) = explode( '=', $line, 2 );
+			$key = trim( $key );
+			$value = trim( $value );
+			// Remove quotes if present
+			$value = trim( $value, '"\'');
+			if ( ! getenv( $key ) ) {
+				putenv( "$key=$value" );
+				$_ENV[ $key ] = $value;
+				$_SERVER[ $key ] = $value;
+			}
+		}
+	}
+}
+
+// Helper function to get environment variable with fallback
+function wp_get_env( $key, $default = '' ) {
+	$value = getenv( $key );
+	if ( $value === false ) {
+		return $default;
+	}
+	return $value;
+}
+
 // ** Database settings - You can get this info from your web host ** //
 /** The name of the database for WordPress */
-define( 'DB_NAME', getenv('DB_NAME') ?: 'database_name_here' );
+define( 'DB_NAME', wp_get_env( 'DB_NAME', 'database_name_here' ) );
 
 /** Database username */
-define( 'DB_USER', getenv('DB_USER') ?: 'username_here' );
+define( 'DB_USER', wp_get_env( 'DB_USER', 'username_here' ) );
 
 /** Database password */
-define( 'DB_PASSWORD', getenv('DB_PASSWORD') ?: 'password_here' );
+define( 'DB_PASSWORD', wp_get_env( 'DB_PASSWORD', 'password_here' ) );
 
 /** Database hostname */
-define( 'DB_HOST', getenv('DB_HOST') ?: 'localhost' );
+define( 'DB_HOST', wp_get_env( 'DB_HOST', 'localhost' ) );
 
 /** Database charset to use in creating database tables. */
-define( 'DB_CHARSET', 'utf8' );
+define( 'DB_CHARSET', wp_get_env( 'DB_CHARSET', 'utf8mb4' ) );
 
 /** The database collate type. Don't change this if in doubt. */
-define( 'DB_COLLATE', '' );
+define( 'DB_COLLATE', wp_get_env( 'DB_COLLATE', 'utf8mb4_unicode_ci' ) );
 
 /**#@+
  * Authentication unique keys and salts.

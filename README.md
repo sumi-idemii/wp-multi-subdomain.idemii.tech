@@ -11,9 +11,35 @@
 
 ## セットアップ手順
 
+### クイックスタート
+
+セットアップスクリプトを実行して、基本的な設定を行います：
+
+```bash
+./setup.sh
+```
+
 ### 1. データベースの準備
 
-MySQL/MariaDBでデータベースとユーザーを作成します：
+#### 方法A: SQLスクリプトを使用（推奨）
+
+1. `database-setup.sql`ファイルを編集して、データベース名、ユーザー名、パスワードを設定します
+2. MySQLに接続してスクリプトを実行します：
+
+```bash
+mysql -u root -p < database-setup.sql
+```
+
+または、MySQLに接続してから実行：
+
+```bash
+mysql -u root -p
+source database-setup.sql;
+```
+
+#### 方法B: 手動でSQLを実行
+
+MySQL/MariaDBに接続して、以下のSQLを実行します：
 
 ```sql
 CREATE DATABASE wordpress_multisite CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -22,9 +48,37 @@ GRANT ALL PRIVILEGES ON wordpress_multisite.* TO 'wp_user'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
+**重要**: `your_secure_password`を強力なパスワードに変更してください。
+
 ### 2. 環境変数の設定
 
-`wp-config.php`では環境変数からデータベース情報を読み込みます。以下の環境変数を設定してください：
+#### 方法A: .envファイルを使用（推奨）
+
+1. `env.example`ファイルを`.env`にコピーします：
+
+```bash
+cp env.example .env
+```
+
+2. `.env`ファイルを編集して、データベース情報を設定します：
+
+```bash
+# エディタで開く（例：nano、vim、VS Codeなど）
+nano .env
+```
+
+以下の値を実際のデータベース情報に変更します：
+
+```
+DB_NAME=wordpress_multisite
+DB_USER=wp_user
+DB_PASSWORD=your_secure_password_here
+DB_HOST=localhost
+```
+
+#### 方法B: 環境変数を直接設定
+
+シェルで環境変数を設定します：
 
 ```bash
 export DB_NAME=wordpress_multisite
@@ -33,27 +87,63 @@ export DB_PASSWORD=your_secure_password
 export DB_HOST=localhost
 ```
 
-または、`.env`ファイルを作成して設定することもできます（ただし、`.env`ファイルは`.gitignore`に含まれています）。
+### 3. Webサーバーの起動
 
-### 3. WordPressのインストール
+#### ローカル開発環境（PHPビルトインサーバー）
 
-1. ブラウザでサイトにアクセスします
-2. WordPressのインストールウィザードに従って初期設定を行います
-3. データベース情報を入力します
+```bash
+php -S localhost:8000
+```
 
-### 4. マルチサイト機能の有効化
+ブラウザで `http://localhost:8000` にアクセスします。
+
+#### Apache/Nginxを使用する場合
+
+- Apache: ドキュメントルートをこのディレクトリに設定
+- Nginx: ルートディレクトリをこのディレクトリに設定
+
+### 4. WordPressのインストール
+
+1. ブラウザでサイトにアクセスします（例：`http://localhost:8000`）
+2. 言語を選択します
+3. 「さあ、始めましょう！」をクリックします
+4. データベース接続情報が`.env`ファイルから自動的に読み込まれます
+   - データベース名、ユーザー名、パスワード、データベースホストが正しく設定されていることを確認
+5. 「送信」をクリックします
+6. 「インストール実行」をクリックします
+7. サイト情報を入力します：
+   - サイトのタイトル
+   - ユーザー名（管理者）
+   - パスワード（強力なパスワードを推奨）
+   - メールアドレス
+8. 「WordPressをインストール」をクリックします
+
+### 5. マルチサイト機能の有効化
 
 WordPressのインストール後、以下の手順でマルチサイト機能を有効化します：
 
-1. WordPress管理画面にログインします
+1. WordPress管理画面にログインします（`/wp-admin`）
 2. **ツール** > **ネットワークの設置** にアクセスします
-3. サブドメイン型を選択します
-4. ネットワーク名と管理者メールアドレスを入力します
+3. ネットワークのタイプを選択します：
+   - **サブドメイン型** を選択（推奨）
+   - または **サブディレクトリ型** を選択
+4. ネットワーク名と管理者メールアドレスを確認します
 5. **インストール** をクリックします
 
-### 5. wp-config.phpと.htaccessの更新
+#### マルチサイト設定後の作業
 
-マルチサイトのインストール後、WordPressが自動的に`wp-config.php`と`.htaccess`を更新します。これらの変更をGitにコミットしてください。
+WordPressが`wp-config.php`と`.htaccess`を自動的に更新します。表示されたコードをコピーして、それぞれのファイルに追加します。
+
+**重要**: マルチサイト設定後、必ず以下を実行してください：
+
+1. ブラウザを再読み込みします
+2. ネットワーク管理画面にログインします
+3. 必要に応じて、変更をGitにコミットします：
+
+```bash
+git add wp-config.php .htaccess
+git commit -m "Enable WordPress multisite"
+```
 
 ### 6. DNS設定（サブドメイン型の場合）
 
