@@ -12,28 +12,28 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup SSH key
+      - name: Create theme archive
         run: |
-          mkdir -p ~/.ssh
-          # SSH鍵を正しい形式で保存（catとヒアドキュメントを使用）
-          cat > ~/.ssh/deploy_key << 'EOF'
-          ${{ secrets.SSH_KEY }}
-          EOF
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
-
-      - name: Deploy themes using rsync
-        run: |
-          rsync -avz --delete \
-            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=~/.ssh/known_hosts" \
+          cd wp-content/themes
+          tar -czf /tmp/themes.tar.gz \
             --exclude='.git' \
             --exclude='.github' \
             --exclude='twentytwenty*' \
             --exclude='twenty*' \
-            wp-content/themes/ \
-            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/
-      
-      - name: Set file permissions
+            .
+
+      - name: Deploy themes to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          source: "/tmp/themes.tar.gz"
+          target: "/tmp/"
+          strip_components: 0
+
+      - name: Extract and deploy themes
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -41,6 +41,17 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
           script: |
+            # テーマディレクトリを作成
+            mkdir -p ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/
+            
+            # アーカイブを展開
+            cd ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/
+            tar -xzf /tmp/themes.tar.gz
+            
+            # 一時ファイルを削除
+            rm -f /tmp/themes.tar.gz
+            
+            # ファイルの所有者とパーミッションを設定
             sudo chown -R bitnami:daemon ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/
             sudo find ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/ -type d -exec chmod 755 {} \;
             sudo find ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/ -type f -exec chmod 644 {} \;
