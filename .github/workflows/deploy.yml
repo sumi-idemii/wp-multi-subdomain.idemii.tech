@@ -57,21 +57,39 @@ jobs:
           ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
           chmod 600 ~/.ssh/known_hosts
 
-      - name: Install rsync
+      - name: Create theme archive
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y rsync
-
-      - name: Deploy themes with rsync
-        run: |
-          rsync -avz --delete \
-            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=~/.ssh/known_hosts" \
+          cd wp-content/themes
+          # テーマファイルをアーカイブ（デフォルトテーマを除外）
+          tar -czf /tmp/themes.tar.gz \
             --exclude='.git' \
             --exclude='.github' \
             --exclude='twentytwenty*' \
             --exclude='twenty*' \
-            wp-content/themes/ \
-            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/
+            --exclude='*.tar.gz' \
+            . 2>/dev/null || \
+          tar -czf /tmp/themes.tar.gz index.php 2>/dev/null || \
+          (echo "No theme files found" && touch /tmp/themes.tar.gz)
+          ls -lh /tmp/themes.tar.gz
+
+      - name: Deploy themes with scp
+        run: |
+          scp -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            /tmp/themes.tar.gz \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/themes.tar.gz
+
+      - name: Extract themes on server
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "mkdir -p ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/ && \
+             cd ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/ && \
+             tar -xzf /tmp/themes.tar.gz && \
+             rm -f /tmp/themes.tar.gz"
 
       - name: Set file permissions
         run: |
