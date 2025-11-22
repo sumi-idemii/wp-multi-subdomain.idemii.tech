@@ -68,6 +68,8 @@ yarn-error.log
 # Database dumps
 *.sql
 *.sql.gz
+# Exception: database setup template
+!database-setup.sql
 
 # PHP specific
 vendor/
