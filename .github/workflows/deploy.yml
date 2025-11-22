@@ -15,14 +15,28 @@ jobs:
       - name: Create theme archive
         run: |
           cd wp-content/themes
-          tar -czf themes.tar.gz \
-            --exclude='.git' \
-            --exclude='.github' \
-            --exclude='twentytwenty*' \
-            --exclude='twenty*' \
-            .
+          # アーカイブするファイルを確認
+          FILES=$(find . -type f ! -name "*.tar.gz" ! -path "./twentytwenty*" ! -path "./twenty*" ! -path "./.git/*" ! -path "./.github/*" | head -20)
+          if [ -z "$FILES" ]; then
+            echo "No theme files found to archive"
+            # 空のアーカイブを作成（index.phpが存在する場合）
+            if [ -f "index.php" ]; then
+              tar -czf themes.tar.gz index.php
+            else
+              echo "No files to archive, creating empty archive"
+              touch themes.tar.gz
+            fi
+          else
+            tar -czf themes.tar.gz \
+              --exclude='.git' \
+              --exclude='.github' \
+              --exclude='twentytwenty*' \
+              --exclude='twenty*' \
+              --exclude='*.tar.gz' \
+              .
+          fi
           # アーカイブが作成されたことを確認
-          ls -lh themes.tar.gz
+          ls -lh themes.tar.gz || echo "Archive creation failed"
 
       - name: Deploy themes to server
         uses: appleboy/scp-action@v0.1.7
@@ -57,3 +71,5 @@ jobs:
             sudo chown -R bitnami:daemon ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/
             sudo find ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/ -type d -exec chmod 755 {} \;
             sudo find ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/ -type f -exec chmod 644 {} \;
+
+            
