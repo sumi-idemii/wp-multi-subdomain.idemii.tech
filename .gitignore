@@ -1,10 +1,24 @@
-# WordPress Core Files (keep in git)
-# We're tracking WordPress core for deployment
+# WordPress Core Files
+# Exclude WordPress core files (already installed on Lightsail)
+wp-admin/
+wp-includes/
+wp-*.php
+xmlrpc.php
+license.txt
+readme.html
 
 # WordPress Configuration
 # Note: wp-config.php contains sensitive data and should use environment variables
 wp-config.php
 .htaccess
+
+# Keep only custom themes (exclude default WordPress themes)
+wp-content/themes/twentytwenty*
+wp-content/themes/twenty*
+
+# Exclude default plugins and languages (already on Lightsail)
+wp-content/plugins/
+wp-content/languages/
 
 # WordPress Uploads
 wp-content/uploads/
