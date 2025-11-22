@@ -12,12 +12,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
       - name: Deploy themes to Lightsail
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
+          key_path: ~/.ssh/deploy_key
           port: ${{ secrets.SSH_PORT || 22 }}
           source: "wp-content/themes/*"
           target: "${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/"
@@ -29,7 +36,7 @@ jobs:
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
+          key_path: ~/.ssh/deploy_key
           port: ${{ secrets.SSH_PORT || 22 }}
           script: |
             sudo chown -R bitnami:daemon ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/
