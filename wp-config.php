@@ -59,7 +59,8 @@ define( 'DB_USER', wp_get_env( 'DB_USER', 'username_here' ) );
 define( 'DB_PASSWORD', wp_get_env( 'DB_PASSWORD', 'password_here' ) );
 
 /** Database hostname */
-define( 'DB_HOST', wp_get_env( 'DB_HOST', 'localhost' ) );
+// Use 127.0.0.1 for Docker MySQL TCP connection instead of localhost (socket)
+define( 'DB_HOST', wp_get_env( 'DB_HOST', '127.0.0.1' ) );
 
 /** Database charset to use in creating database tables. */
 define( 'DB_CHARSET', wp_get_env( 'DB_CHARSET', 'utf8mb4' ) );
