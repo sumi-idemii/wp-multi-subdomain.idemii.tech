@@ -9,54 +9,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Create theme archive
-        run: |
-          cd wp-content/themes
-          # アーカイブするファイルをリストアップ（Gitで管理されているファイルのみ）
-          FILES=$(git ls-files wp-content/themes/ 2>/dev/null | grep -v "twentytwenty" | grep -v "twenty" | sed 's|wp-content/themes/||' || find . -name "index.php" -type f)
-          
-          if [ -z "$FILES" ] || [ ! -f "index.php" ]; then
-            echo "No theme files found to archive, creating minimal archive"
-            # index.phpが存在する場合のみアーカイブ
-            if [ -f "index.php" ]; then
-              tar -czf themes.tar.gz index.php 2>&1 || echo "Archive created with index.php"
-            else
-              echo "Creating empty archive"
-              tar -czf themes.tar.gz --files-from /dev/null 2>&1 || touch themes.tar.gz
-            fi
-          else
-            # ファイルリストからアーカイブを作成
-            echo "$FILES" | tar -czf themes.tar.gz --files-from - --exclude='*.tar.gz' 2>&1 || {
-              echo "Failed to create archive from file list, trying alternative method"
-              tar -czf themes.tar.gz \
-                --warning=no-file-changed \
-                --exclude='.git' \
-                --exclude='.github' \
-                --exclude='twentytwenty*' \
-                --exclude='twenty*' \
-                --exclude='*.tar.gz' \
-                . 2>&1 || echo "Archive creation completed with warnings"
-            }
-          fi
-          # アーカイブが作成されたことを確認
-          ls -lh themes.tar.gz || echo "Archive file not found"
-
       - name: Deploy themes to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          port: ${{ secrets.SSH_PORT || 22 }}
-          source: "wp-content/themes/themes.tar.gz"
-          target: "/tmp/"
-          strip_components: 0
-
-      - name: Extract and deploy themes
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_URL: ${{ github.repository }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -65,13 +22,30 @@ jobs:
           script: |
             # テーマディレクトリを作成
             mkdir -p ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/
-            
-            # アーカイブを展開
             cd ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/
-            tar -xzf /tmp/themes.tar.gz
             
-            # 一時ファイルを削除
-            rm -f /tmp/themes.tar.gz
+            # 一時ディレクトリを作成
+            TEMP_DIR=$(mktemp -d)
+            cd $TEMP_DIR
+            
+            # GitHubからリポジトリをクローン（shallow clone）
+            git clone --depth 1 --filter=blob:none --sparse https://github.com/${{ github.repository }}.git .
+            git sparse-checkout set --no-cone 'wp-content/themes/*'
+            git sparse-checkout add '!wp-content/themes/twentytwenty*'
+            git sparse-checkout add '!wp-content/themes/twenty*'
+            
+            # テーマファイルをコピー
+            if [ -d "wp-content/themes" ]; then
+              cp -r wp-content/themes/* ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/ 2>/dev/null || true
+              # index.phpが存在する場合のみコピー
+              if [ -f "wp-content/themes/index.php" ]; then
+                cp wp-content/themes/index.php ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/
+              fi
+            fi
+            
+            # 一時ディレクトリを削除
+            cd /
+            rm -rf $TEMP_DIR
             
             # ファイルの所有者とパーミッションを設定
             sudo chown -R bitnami:daemon ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/
