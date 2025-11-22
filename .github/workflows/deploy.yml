@@ -15,10 +15,45 @@ jobs:
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
-          # SSH鍵をbase64デコード（失敗した場合は通常の形式として扱う）
-          echo "${{ secrets.SSH_KEY }}" | base64 -d > ~/.ssh/deploy_key 2>/dev/null || echo "${{ secrets.SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 700 ~/.ssh
+          
+          # SSH鍵を保存（複数の方法を試行）
+          SSH_KEY_CONTENT="${{ secrets.SSH_KEY }}"
+          
+          # 方法1: Base64デコードを試行
+          if echo "$SSH_KEY_CONTENT" | base64 -d > ~/.ssh/deploy_key 2>/dev/null; then
+            echo "SSH key decoded from base64"
+          # 方法2: 通常の形式として保存
+          else
+            echo "$SSH_KEY_CONTENT" > ~/.ssh/deploy_key
+            echo "SSH key saved as plain text"
+          fi
+          
+          # 鍵の形式を確認
+          if head -1 ~/.ssh/deploy_key | grep -q "BEGIN"; then
+            echo "SSH key format: Valid (starts with BEGIN)"
+          else
+            echo "SSH key format: May be invalid (does not start with BEGIN)"
+            echo "First line: $(head -1 ~/.ssh/deploy_key)"
+          fi
+          
+          # パーミッションを設定
           chmod 600 ~/.ssh/deploy_key
+          
+          # 鍵の検証
+          if ssh-keygen -l -f ~/.ssh/deploy_key >/dev/null 2>&1; then
+            echo "SSH key validation: OK"
+            ssh-keygen -l -f ~/.ssh/deploy_key
+          else
+            echo "SSH key validation: FAILED"
+            echo "Key file size: $(wc -c < ~/.ssh/deploy_key) bytes"
+            echo "First 100 characters: $(head -c 100 ~/.ssh/deploy_key)"
+            exit 1
+          fi
+          
+          # ホストキーを追加
           ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+          chmod 600 ~/.ssh/known_hosts
 
       - name: Deploy themes with rsync
         run: |
