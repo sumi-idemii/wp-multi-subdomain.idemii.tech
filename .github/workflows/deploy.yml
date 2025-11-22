@@ -9,45 +9,35 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy themes to server
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH key from base64
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" | base64 -d > ~/.ssh/deploy_key 2>/dev/null || echo "${{ secrets.SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Deploy themes using rsync
+        run: |
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=~/.ssh/known_hosts" \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='twentytwenty*' \
+            --exclude='twenty*' \
+            wp-content/themes/ \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/
+      
+      - name: Set file permissions
         uses: appleboy/ssh-action@v1.0.3
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO_URL: ${{ github.repository }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
           script: |
-            # テーマディレクトリを作成
-            mkdir -p ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/
-            cd ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/
-            
-            # 一時ディレクトリを作成
-            TEMP_DIR=$(mktemp -d)
-            cd $TEMP_DIR
-            
-            # GitHubからリポジトリをクローン（shallow clone）
-            git clone --depth 1 --filter=blob:none --sparse https://github.com/${{ github.repository }}.git .
-            git sparse-checkout set --no-cone 'wp-content/themes/*'
-            git sparse-checkout add '!wp-content/themes/twentytwenty*'
-            git sparse-checkout add '!wp-content/themes/twenty*'
-            
-            # テーマファイルをコピー
-            if [ -d "wp-content/themes" ]; then
-              cp -r wp-content/themes/* ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/ 2>/dev/null || true
-              # index.phpが存在する場合のみコピー
-              if [ -f "wp-content/themes/index.php" ]; then
-                cp wp-content/themes/index.php ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/
-              fi
-            fi
-            
-            # 一時ディレクトリを削除
-            cd /
-            rm -rf $TEMP_DIR
-            
-            # ファイルの所有者とパーミッションを設定
             sudo chown -R bitnami:daemon ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/
             sudo find ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/ -type d -exec chmod 755 {} \;
             sudo find ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/ -type f -exec chmod 644 {} \;
