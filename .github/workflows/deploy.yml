@@ -15,12 +15,14 @@ jobs:
       - name: Create theme archive
         run: |
           cd wp-content/themes
-          tar -czf /tmp/themes.tar.gz \
+          tar -czf themes.tar.gz \
             --exclude='.git' \
             --exclude='.github' \
             --exclude='twentytwenty*' \
             --exclude='twenty*' \
             .
+          # アーカイブが作成されたことを確認
+          ls -lh themes.tar.gz
 
       - name: Deploy themes to server
         uses: appleboy/scp-action@v0.1.7
@@ -29,7 +31,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
-          source: "/tmp/themes.tar.gz"
+          source: "wp-content/themes/themes.tar.gz"
           target: "/tmp/"
           strip_components: 0
 
