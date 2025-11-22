@@ -1,0 +1,37 @@
+name: Deploy to Lightsail
+
+on:
+  push:
+    branches:
+      - main  # デプロイ対象のブランチ
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy themes to Lightsail
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          source: "wp-content/themes/*"
+          target: "${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/"
+          rm: false
+          strip_components: 2
+      
+      - name: Set file permissions
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script: |
+            sudo chown -R bitnami:daemon ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/
+            sudo find ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/ -type d -exec chmod 755 {} \;
+            sudo find ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/ -type f -exec chmod 644 {} \;
