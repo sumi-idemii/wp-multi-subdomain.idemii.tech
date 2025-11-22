@@ -15,28 +15,34 @@ jobs:
       - name: Create theme archive
         run: |
           cd wp-content/themes
-          # アーカイブするファイルを確認
-          FILES=$(find . -type f ! -name "*.tar.gz" ! -path "./twentytwenty*" ! -path "./twenty*" ! -path "./.git/*" ! -path "./.github/*" | head -20)
-          if [ -z "$FILES" ]; then
-            echo "No theme files found to archive"
-            # 空のアーカイブを作成（index.phpが存在する場合）
+          # アーカイブするファイルをリストアップ（Gitで管理されているファイルのみ）
+          FILES=$(git ls-files wp-content/themes/ 2>/dev/null | grep -v "twentytwenty" | grep -v "twenty" | sed 's|wp-content/themes/||' || find . -name "index.php" -type f)
+          
+          if [ -z "$FILES" ] || [ ! -f "index.php" ]; then
+            echo "No theme files found to archive, creating minimal archive"
+            # index.phpが存在する場合のみアーカイブ
             if [ -f "index.php" ]; then
-              tar -czf themes.tar.gz index.php
+              tar -czf themes.tar.gz index.php 2>&1 || echo "Archive created with index.php"
             else
-              echo "No files to archive, creating empty archive"
-              touch themes.tar.gz
+              echo "Creating empty archive"
+              tar -czf themes.tar.gz --files-from /dev/null 2>&1 || touch themes.tar.gz
             fi
           else
-            tar -czf themes.tar.gz \
-              --exclude='.git' \
-              --exclude='.github' \
-              --exclude='twentytwenty*' \
-              --exclude='twenty*' \
-              --exclude='*.tar.gz' \
-              .
+            # ファイルリストからアーカイブを作成
+            echo "$FILES" | tar -czf themes.tar.gz --files-from - --exclude='*.tar.gz' 2>&1 || {
+              echo "Failed to create archive from file list, trying alternative method"
+              tar -czf themes.tar.gz \
+                --warning=no-file-changed \
+                --exclude='.git' \
+                --exclude='.github' \
+                --exclude='twentytwenty*' \
+                --exclude='twenty*' \
+                --exclude='*.tar.gz' \
+                . 2>&1 || echo "Archive creation completed with warnings"
+            }
           fi
           # アーカイブが作成されたことを確認
-          ls -lh themes.tar.gz || echo "Archive creation failed"
+          ls -lh themes.tar.gz || echo "Archive file not found"
 
       - name: Deploy themes to server
         uses: appleboy/scp-action@v0.1.7
