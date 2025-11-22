@@ -1,0 +1,83 @@
+# WordPress Core Files (keep in git)
+# We're tracking WordPress core for deployment
+
+# WordPress Configuration
+# Note: wp-config.php is tracked but should have sensitive data in environment variables
+# wp-config.php
+
+# WordPress Uploads
+wp-content/uploads/
+wp-content/blogs.dir/
+wp-content/upgrade/
+wp-content/backup-db/
+wp-content/advanced-cache.php
+wp-content/wp-cache-config.php
+wp-content/cache/
+wp-content/cache/supercache/
+
+# WordPress Debug Log
+wp-content/debug.log
+
+# WordPress Temporary Files
+*.log
+*.tmp
+*.temp
+
+# OS Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*~
+
+# IDE Files
+.idea/
+.vscode/
+*.swp
+*.swo
+*.swn
+.project
+.classpath
+.settings/
+
+# Node modules (if using build tools)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
+
+# Compressed files
+*.zip
+*.tar
+*.tar.gz
+*.gz
+
+# Database dumps
+*.sql
+*.sql.gz
+
+# PHP specific
+vendor/
+composer.lock
+
+# Build files
+dist/
+build/
+
+# Local development
+local-config.php
+wp-config-local.php
+
