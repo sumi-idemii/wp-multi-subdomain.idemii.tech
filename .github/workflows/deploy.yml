@@ -17,37 +17,38 @@ jobs:
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           
-          # SSH鍵を保存（複数の方法を試行）
-          SSH_KEY_CONTENT="${{ secrets.SSH_KEY }}"
-          
-          # 方法1: Base64デコードを試行
-          if echo "$SSH_KEY_CONTENT" | base64 -d > ~/.ssh/deploy_key 2>/dev/null; then
-            echo "SSH key decoded from base64"
-          # 方法2: 通常の形式として保存
-          else
-            echo "$SSH_KEY_CONTENT" > ~/.ssh/deploy_key
-            echo "SSH key saved as plain text"
-          fi
-          
-          # 鍵の形式を確認
-          if head -1 ~/.ssh/deploy_key | grep -q "BEGIN"; then
-            echo "SSH key format: Valid (starts with BEGIN)"
-          else
-            echo "SSH key format: May be invalid (does not start with BEGIN)"
-            echo "First line: $(head -1 ~/.ssh/deploy_key)"
-          fi
+          # SSH鍵を保存（通常の形式として直接保存）
+          # GitHub Secretsには、秘密鍵全体（-----BEGINから-----ENDまで、改行を含む）を保存してください
+          cat > ~/.ssh/deploy_key << 'SSHKEY'
+          ${{ secrets.SSH_KEY }}
+          SSHKEY
           
           # パーミッションを設定
           chmod 600 ~/.ssh/deploy_key
           
+          # 鍵の形式を確認
+          if head -1 ~/.ssh/deploy_key | grep -q "BEGIN"; then
+            echo "✓ SSH key format: Valid (starts with BEGIN)"
+            head -1 ~/.ssh/deploy_key
+          else
+            echo "✗ SSH key format: Invalid (does not start with BEGIN)"
+            echo "First line: $(head -1 ~/.ssh/deploy_key | head -c 50)"
+            echo ""
+            echo "ERROR: SSH key must start with '-----BEGIN OPENSSH PRIVATE KEY-----' or '-----BEGIN RSA PRIVATE KEY-----'"
+            echo "Please check your SSH_KEY secret in GitHub Settings."
+            exit 1
+          fi
+          
           # 鍵の検証
           if ssh-keygen -l -f ~/.ssh/deploy_key >/dev/null 2>&1; then
-            echo "SSH key validation: OK"
+            echo "✓ SSH key validation: OK"
             ssh-keygen -l -f ~/.ssh/deploy_key
           else
-            echo "SSH key validation: FAILED"
+            echo "✗ SSH key validation: FAILED"
             echo "Key file size: $(wc -c < ~/.ssh/deploy_key) bytes"
-            echo "First 100 characters: $(head -c 100 ~/.ssh/deploy_key)"
+            echo ""
+            echo "Please ensure your SSH_KEY secret contains the complete private key"
+            echo "including the BEGIN and END lines with all newlines preserved."
             exit 1
           fi
           
