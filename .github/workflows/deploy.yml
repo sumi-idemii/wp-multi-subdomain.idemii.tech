@@ -1,0 +1,102 @@
+name: Deploy to Lightsail
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:  # 手動実行も可能にする
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          
+          # SSH鍵を保存（通常の形式として直接保存）
+          # GitHub Secretsには、秘密鍵全体（-----BEGINから-----ENDまで、改行を含む）を保存してください
+          cat > ~/.ssh/deploy_key << 'SSHKEY'
+          ${{ secrets.SSH_KEY }}
+          SSHKEY
+          
+          # パーミッションを設定
+          chmod 600 ~/.ssh/deploy_key
+          
+          # 鍵の形式を確認
+          if head -1 ~/.ssh/deploy_key | grep -q "BEGIN"; then
+            echo "✓ SSH key format: Valid (starts with BEGIN)"
+            head -1 ~/.ssh/deploy_key
+          else
+            echo "✗ SSH key format: Invalid (does not start with BEGIN)"
+            echo "First line: $(head -1 ~/.ssh/deploy_key | head -c 50)"
+            echo ""
+            echo "ERROR: SSH key must start with '-----BEGIN OPENSSH PRIVATE KEY-----' or '-----BEGIN RSA PRIVATE KEY-----'"
+            echo "Please check your SSH_KEY secret in GitHub Settings."
+            exit 1
+          fi
+          
+          # 鍵の検証
+          if ssh-keygen -l -f ~/.ssh/deploy_key >/dev/null 2>&1; then
+            echo "✓ SSH key validation: OK"
+            ssh-keygen -l -f ~/.ssh/deploy_key
+          else
+            echo "✗ SSH key validation: FAILED"
+            echo "Key file size: $(wc -c < ~/.ssh/deploy_key) bytes"
+            echo ""
+            echo "Please ensure your SSH_KEY secret contains the complete private key"
+            echo "including the BEGIN and END lines with all newlines preserved."
+            exit 1
+          fi
+          
+          # ホストキーを追加
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Create theme archive
+        run: |
+          cd wp-content/themes
+          # テーマファイルをアーカイブ（デフォルトテーマを除外）
+          tar -czf /tmp/themes.tar.gz \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='twentytwenty*' \
+            --exclude='twenty*' \
+            --exclude='*.tar.gz' \
+            . 2>/dev/null || \
+          tar -czf /tmp/themes.tar.gz index.php 2>/dev/null || \
+          (echo "No theme files found" && touch /tmp/themes.tar.gz)
+          ls -lh /tmp/themes.tar.gz
+
+      - name: Deploy themes with scp
+        run: |
+          scp -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            /tmp/themes.tar.gz \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/themes.tar.gz
+
+      - name: Extract themes on server
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "mkdir -p ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/ && \
+             cd ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/ && \
+             tar -xzf /tmp/themes.tar.gz && \
+             rm -f /tmp/themes.tar.gz"
+
+      - name: Set file permissions
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "sudo chown -R bitnami:daemon ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/ && \
+             sudo find ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/ -type d -exec chmod 755 {} \; && \
+             sudo find ${{ secrets.SSH_REMOTE_PATH }}/wp-content/themes/ -type f -exec chmod 644 {} \;"

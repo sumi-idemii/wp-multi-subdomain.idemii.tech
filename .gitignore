@@ -1,6 +1,50 @@
-# WordPress theme .gitignore
+# WordPress Core Files
+# Exclude WordPress core files (already installed on Lightsail)
+wp-admin/
+wp-includes/
+wp-*.php
+xmlrpc.php
+license.txt
+readme.html
 
-# OS files
+# WordPress Configuration
+# Note: wp-config.php contains sensitive data and should use environment variables
+wp-config.php
+.htaccess
+
+# Keep only custom themes (exclude default WordPress themes)
+wp-content/themes/twentytwenty*
+wp-content/themes/twenty*
+
+# Allow themes directory structure and custom themes
+!wp-content/themes/
+!wp-content/themes/index.php
+!wp-content/themes/multisite01/
+!wp-content/themes/multisite01/**
+
+# Exclude default plugins and languages (already on Lightsail)
+wp-content/plugins/
+wp-content/languages/
+
+# WordPress Uploads
+wp-content/uploads/
+wp-content/blogs.dir/
+wp-content/upgrade/
+wp-content/backup-db/
+wp-content/advanced-cache.php
+wp-content/wp-cache-config.php
+wp-content/cache/
+wp-content/cache/supercache/
+
+# WordPress Debug Log
+wp-content/debug.log
+
+# WordPress Temporary Files
+*.log
+*.tmp
+*.temp
+
+# OS Files
 .DS_Store
 .DS_Store?
 ._*
@@ -8,14 +52,16 @@
 .Trashes
 ehthumbs.db
 Thumbs.db
+*~
 
-# Editor files
-.vscode/
+# IDE Files
 .idea/
+.vscode/
 *.swp
 *.swo
-*~
+*.swn
 .project
+.classpath
 .settings/
 
 # Node modules (if using build tools)
@@ -23,26 +69,38 @@ node_modules/
 npm-debug.log
 yarn-error.log
 
-# Build files
-dist/
-build/
-*.map
-
 # Environment files
 .env
 .env.local
 .env.*.local
 
-# Logs
-*.log
-logs/
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
 
-# Temporary files
-tmp/
-temp/
-*.tmp
+# Compressed files
+*.zip
+*.tar
+*.tar.gz
+*.gz
 
-# WordPress specific
-wp-config.php
-.htaccess
+# Database dumps
+*.sql
+*.sql.gz
+# Exception: database setup template
+!database-setup.sql
+
+# PHP specific
+vendor/
+composer.lock
+
+# Build files
+dist/
+build/
+
+# Local development
+local-config.php
+wp-config-local.php
 
