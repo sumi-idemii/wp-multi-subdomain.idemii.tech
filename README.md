@@ -1,221 +1,340 @@
-# WordPress マルチサイト（サブドメイン型）
+# WordPress マルチサイト（サブドメイン型）ローカル環境構築ガイド
 
-このプロジェクトは、AWS Lightsail上で動作するWordPressマルチサイト（サブドメイン型）のインストールです。
+## 概要
 
-## 要件
+macOS (Apple Silicon) 上で Apache + PHP + MySQL を使用した WordPress マルチサイト（サブドメイン型）のローカル開発環境を構築します。
 
-- PHP 7.4以上
-- MySQL 5.7以上 または MariaDB 10.3以上
-- Apache または Nginx
-- mod_rewrite が有効なApache（サブドメイン型マルチサイトの場合）
+## 前提条件
+
+- macOS (Apple Silicon)
+- Homebrew がインストールされていること
 
 ## セットアップ手順
 
-### クイックスタート
-
-セットアップスクリプトを実行して、基本的な設定を行います：
+### 1. 初期セットアップスクリプトの実行
 
 ```bash
+cd /Users/sumikazuhisa/project/wordpress/wp-multi-subdomain.idemii.tech
+chmod +x setup.sh
 ./setup.sh
 ```
 
-### 1. データベースの準備
+このスクリプトは以下を実行します：
+- Homebrew の確認
+- Apache, PHP, MySQL のインストール
+- ディレクトリ構造の作成
+- MySQL データベースの作成
 
-#### 方法A: SQLスクリプトを使用（推奨）
+### 2. Apache 設定
 
-1. `database-setup.sql`ファイルを編集して、データベース名、ユーザー名、パスワードを設定します
-2. MySQLに接続してスクリプトを実行します：
+#### 2.1 バーチャルホスト設定ファイルの配置
 
-```bash
-mysql -u root -p < database-setup.sql
-```
-
-または、MySQLに接続してから実行：
-
-```bash
-mysql -u root -p
-source database-setup.sql;
-```
-
-#### 方法B: 手動でSQLを実行
-
-MySQL/MariaDBに接続して、以下のSQLを実行します：
-
-```sql
-CREATE DATABASE wordpress_multisite CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'wp_user'@'localhost' IDENTIFIED BY 'your_secure_password';
-GRANT ALL PRIVILEGES ON wordpress_multisite.* TO 'wp_user'@'localhost';
-FLUSH PRIVILEGES;
-```
-
-**重要**: `your_secure_password`を強力なパスワードに変更してください。
-
-### 2. 環境変数の設定
-
-#### 方法A: .envファイルを使用（推奨）
-
-1. `env.example`ファイルを`.env`にコピーします：
+Homebrew でインストールした Apache の設定ファイルを編集します：
 
 ```bash
-cp env.example .env
+# Apache設定ファイルの場所を確認
+brew info httpd
 ```
 
-2. `.env`ファイルを編集して、データベース情報を設定します：
+通常、設定ファイルは `/usr/local/etc/httpd/httpd.conf` または `/opt/homebrew/etc/httpd/httpd.conf` にあります。
+
+#### 2.2 httpd.conf の編集
+
+1. バーチャルホスト設定を有効化：
+
+```apache
+# 以下の行のコメントを外す、または追加
+Include /Users/sumikazuhisa/project/wordpress/wp-multi-subdomain.idemii.tech/config/apache/httpd-vhosts.conf
+```
+
+2. `mod_rewrite` が有効になっていることを確認：
+
+```apache
+LoadModule rewrite_module lib/httpd/modules/mod_rewrite.so
+```
+
+3. メインの DocumentRoot の `AllowOverride` を確認：
+
+```apache
+<Directory "/usr/local/var/www">
+    AllowOverride All
+    Require all granted
+</Directory>
+```
+
+設定確認スクリプトを実行：
 
 ```bash
-# エディタで開く（例：nano、vim、VS Codeなど）
-nano .env
+chmod +x scripts/configure-apache.sh
+./scripts/configure-apache.sh
 ```
 
-以下の値を実際のデータベース情報に変更します：
-
-```
-DB_NAME=wordpress_multisite
-DB_USER=wp_user
-DB_PASSWORD=your_secure_password_here
-DB_HOST=localhost
-```
-
-#### 方法B: 環境変数を直接設定
-
-シェルで環境変数を設定します：
+#### 2.3 /etc/hosts の設定
 
 ```bash
-export DB_NAME=wordpress_multisite
-export DB_USER=wp_user
-export DB_PASSWORD=your_secure_password
-export DB_HOST=localhost
+sudo nano /etc/hosts
 ```
 
-### 3. Webサーバーの起動
+以下を追加：
 
-#### ローカル開発環境（PHPビルトインサーバー）
+```
+127.0.0.1 localhost
+127.0.0.1 subA.localhost
+127.0.0.1 subB.localhost
+```
+
+**注意**: `127.0.0.1 localhost` は通常既に存在しますが、念のため確認してください。
+
+### 3. PHP 設定
+
+#### 3.1 PHP 設定ファイルの場所を確認
 
 ```bash
-php -S localhost:8000
+php --ini
 ```
 
-ブラウザで `http://localhost:8000` にアクセスします。
+#### 3.2 php.ini の編集
 
-#### Apache/Nginxを使用する場合
+`config/php/php.ini.custom` の内容を参考に、php.ini の該当箇所を編集してください。
 
-- Apache: ドキュメントルートをこのディレクトリに設定
-- Nginx: ルートディレクトリをこのディレクトリに設定
+主な設定項目：
+- `memory_limit = 256M`
+- `max_execution_time = 120`
+- `upload_max_filesize = 64M`
+- `post_max_size = 64M`
+- `date.timezone = Asia/Tokyo`
 
-### 4. WordPressのインストール
-
-1. ブラウザでサイトにアクセスします（例：`http://localhost:8000`）
-2. 言語を選択します
-3. 「さあ、始めましょう！」をクリックします
-4. データベース接続情報が`.env`ファイルから自動的に読み込まれます
-   - データベース名、ユーザー名、パスワード、データベースホストが正しく設定されていることを確認
-5. 「送信」をクリックします
-6. 「インストール実行」をクリックします
-7. サイト情報を入力します：
-   - サイトのタイトル
-   - ユーザー名（管理者）
-   - パスワード（強力なパスワードを推奨）
-   - メールアドレス
-8. 「WordPressをインストール」をクリックします
-
-### 5. マルチサイト機能の有効化
-
-WordPressのインストール後、以下の手順でマルチサイト機能を有効化します：
-
-1. WordPress管理画面にログインします（`/wp-admin`）
-2. **ツール** > **ネットワークの設置** にアクセスします
-3. ネットワークのタイプを選択します：
-   - **サブドメイン型** を選択（推奨）
-   - または **サブディレクトリ型** を選択
-4. ネットワーク名と管理者メールアドレスを確認します
-5. **インストール** をクリックします
-
-#### マルチサイト設定後の作業
-
-WordPressが`wp-config.php`と`.htaccess`を自動的に更新します。表示されたコードをコピーして、それぞれのファイルに追加します。
-
-**重要**: マルチサイト設定後、必ず以下を実行してください：
-
-1. ブラウザを再読み込みします
-2. ネットワーク管理画面にログインします
-3. 必要に応じて、変更をGitにコミットします：
+#### 3.3 必要な PHP 拡張の確認
 
 ```bash
-git add wp-config.php .htaccess
-git commit -m "Enable WordPress multisite"
+chmod +x scripts/check-php-extensions.sh
+./scripts/check-php-extensions.sh
 ```
 
-### 6. DNS設定（サブドメイン型の場合）
-
-サブドメイン型のマルチサイトを使用する場合、ワイルドカードDNSレコードを設定する必要があります：
-
-```
-*.yourdomain.com.  IN  A  YOUR_SERVER_IP
-```
-
-または、AWS LightsailのDNSゾーンで設定します。
-
-## AWS Lightsailへのデプロイ
-
-### 1. Gitリポジトリの準備
+不足している場合は：
 
 ```bash
-git add .
-git commit -m "Initial WordPress multisite installation"
-git remote add origin <your-repository-url>
-git push -u origin master
+# 例: mbstring が不足している場合
+brew install php@8.3-mbstring
 ```
 
-### 2. Lightsailインスタンスでの設定
+### 4. MySQL 設定
 
-1. LightsailインスタンスにSSH接続します
-2. Gitをインストールします（まだの場合）：
-   ```bash
-   sudo apt-get update
-   sudo apt-get install git
-   ```
-3. WordPressのディレクトリに移動します：
-   ```bash
-   cd /opt/bitnami/wordpress
-   ```
-4. Gitリポジトリをクローンまたはプルします：
-   ```bash
-   git clone <your-repository-url> .
-   # または既存のリポジトリを更新
-   git pull origin master
-   ```
-5. ファイルのパーミッションを設定します：
-   ```bash
-   sudo chown -R bitnami:daemon /opt/bitnami/wordpress
-   sudo find /opt/bitnami/wordpress -type d -exec chmod 755 {} \;
-   sudo find /opt/bitnami/wordpress -type f -exec chmod 644 {} \;
-   ```
-6. `wp-config.php`の環境変数を設定します（Bitnamiの場合は`/opt/bitnami/wordpress/wp-config.php`を直接編集するか、環境変数を設定）
+#### 4.1 データベース作成
 
-### 3. 自動デプロイの設定（オプション）
+```bash
+chmod +x scripts/create-database.sh
+./scripts/create-database.sh
+```
 
-GitHub ActionsやGitLab CI/CDを使用して自動デプロイを設定することもできます。
+データベース情報：
+- データベース名: `wordpress_multisite_apache`
+- ユーザー名: `wp_user_apache`
+- パスワード: `wp_password_apache`
+- ホスト: `localhost`
 
-## 注意事項
+#### 4.2 MySQL 設定ファイル（オプション）
 
-- `wp-config.php`には機密情報が含まれる可能性があるため、本番環境では環境変数を使用することを推奨します
-- `wp-content/uploads/`ディレクトリは`.gitignore`に含まれているため、アップロードされたファイルは別途バックアップが必要です
-- マルチサイトの設定後、`wp-config.php`と`.htaccess`が自動的に更新されます。これらの変更をGitにコミットしてください
+必要に応じて、`config/mysql/my.cnf` の内容を MySQL の設定ファイルに反映してください。
+
+Homebrew でインストールした MySQL の設定ファイルは通常：
+- `/usr/local/etc/my.cnf` または
+- `/opt/homebrew/etc/my.cnf`
+
+### 5. WordPress のインストール
+
+#### 5.1 WordPress のダウンロードと配置
+
+```bash
+chmod +x scripts/install-wordpress.sh
+./scripts/install-wordpress.sh
+```
+
+このスクリプトは最新の WordPress をダウンロードして `public/` ディレクトリに配置します。
+
+#### 5.2 wp-config.php の設定
+
+`public/wp-config.php` を編集して、データベース情報を設定してください：
+
+```php
+define( 'DB_NAME', 'wordpress_multisite_apache' );
+define( 'DB_USER', 'wp_user_apache' );
+define( 'DB_PASSWORD', 'wp_password_apache' );
+define( 'DB_HOST', 'localhost' );
+
+// 文字セット
+define( 'DB_CHARSET', 'utf8mb4' );
+define( 'DB_COLLATE', '' );
+```
+
+#### 5.3 マルチサイト設定の追加
+
+```bash
+chmod +x scripts/add-multisite-config.sh
+./scripts/add-multisite-config.sh
+```
+
+または、手動で `wp-config.php` に以下を追加：
+
+```php
+/* マルチサイト設定 */
+define( 'WP_ALLOW_MULTISITE', true );
+```
+
+**注意**: この時点では `.htaccess` の修正は不要です。管理画面からマルチサイト設定を完了した後に作業します。
+
+### 6. サービスの起動
+
+```bash
+chmod +x scripts/start-services.sh
+./scripts/start-services.sh
+```
+
+または手動で：
+
+```bash
+brew services start httpd
+brew services start mysql
+```
+
+### 7. WordPress のセットアップ
+
+1. ブラウザで以下にアクセス：
+   - http://localhost
+
+2. WordPress の初期セットアップを完了：
+   - サイトタイトル、管理者ユーザー名、パスワードなどを設定
+
+3. 管理画面にログイン：
+   - http://localhost/wp-admin
+
+4. マルチサイト設定：
+   - ツール > ネットワーク設定 からマルチサイトを有効化
+   - 管理画面の指示に従って `.htaccess` と `wp-config.php` を更新
+
+## よく使うコマンド
+
+### サービスの起動/停止
+
+```bash
+# 起動
+./scripts/start-services.sh
+# または
+brew services start httpd
+brew services start mysql
+
+# 停止
+./scripts/stop-services.sh
+# または
+brew services stop httpd
+brew services stop mysql
+
+# 状態確認
+brew services list
+```
+
+### Apache の再起動（設定変更後）
+
+```bash
+brew services restart httpd
+```
+
+### MySQL への接続
+
+```bash
+mysql -u wp_user_apache -p wordpress_multisite_apache
+# パスワード: wp_password_apache
+```
+
+### ログの確認
+
+```bash
+# Apache エラーログ
+tail -f /usr/local/var/log/httpd/error_log
+# または
+tail -f /opt/homebrew/var/log/httpd/error_log
+
+# PHP エラーログ
+tail -f /usr/local/var/log/php_errors.log
+
+# MySQL エラーログ
+tail -f /usr/local/var/log/mysql/error.log
+# または
+tail -f /opt/homebrew/var/log/mysql/error.log
+```
 
 ## トラブルシューティング
 
-### マルチサイトの設定が表示されない
+### Apache が起動しない
 
-- `wp-config.php`で`WP_ALLOW_MULTISITE`が`true`に設定されているか確認してください
-- すべてのプラグインを無効化してから再度試してください
+1. ポート80が使用中でないか確認：
+```bash
+sudo lsof -i :80
+```
 
-### サブドメインにアクセスできない
+2. 設定ファイルの構文チェック：
+```bash
+httpd -t
+```
 
-- DNSのワイルドカードレコードが正しく設定されているか確認してください
-- Apacheの`mod_rewrite`が有効になっているか確認してください
-- `.htaccess`ファイルが正しく配置されているか確認してください
+### PHP が動作しない
 
-## ライセンス
+1. PHP のバージョン確認：
+```bash
+php -v
+```
 
-WordPressはGPL v2またはそれ以降のライセンスの下で公開されています。
+2. Apache に PHP モジュールが読み込まれているか確認：
+```bash
+httpd -M | grep php
+```
 
+### データベースに接続できない
+
+1. MySQL が起動しているか確認：
+```bash
+brew services list | grep mysql
+```
+
+2. ユーザーとデータベースが正しく作成されているか確認：
+```bash
+mysql -u root -e "SHOW DATABASES;"
+mysql -u root -e "SELECT User, Host FROM mysql.user;"
+```
+
+## 注意事項
+
+- **PHP ビルトインサーバーは使用しない**: この環境では Apache を使用します。`php -S` コマンドは使用しないでください。
+- バーチャルサブドメインの設定は後から依頼することとなります。
+- `.htaccess` の修正は、管理画面でマルチサイト設定を完了した後に行います。
+
+## ディレクトリ構造
+
+```
+wp-multi-subdomain.idemii.tech/
+├── config/
+│   ├── apache/
+│   │   ├── httpd-vhosts.conf          # バーチャルホスト設定
+│   │   └── httpd.conf.patch           # httpd.conf への追加内容（参考）
+│   ├── php/
+│   │   └── php.ini.custom             # PHP設定（参考）
+│   └── mysql/
+│       └── my.cnf                     # MySQL設定（参考）
+├── scripts/
+│   ├── setup.sh                       # 初期セットアップ
+│   ├── create-database.sh             # データベース作成
+│   ├── install-wordpress.sh           # WordPressインストール
+│   ├── add-multisite-config.sh       # マルチサイト設定追加
+│   ├── configure-apache.sh            # Apache設定確認
+│   ├── check-php-extensions.sh        # PHP拡張確認
+│   ├── start-services.sh              # サービス起動
+│   └── stop-services.sh               # サービス停止
+├── public/                             # Apache ドキュメントルート（WordPressファイルを配置）
+└── README.md                           # このファイル
+```
+
+## 次のステップ
+
+1. WordPress 管理画面でマルチサイトを有効化
+2. `.htaccess` の修正（管理画面の指示に従う）
+3. バーチャルサブドメインの設定（後から依頼予定）
