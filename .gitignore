@@ -1,106 +1,30 @@
-# WordPress Core Files
-# Exclude WordPress core files (already installed on Lightsail)
-wp-admin/
-wp-includes/
-wp-*.php
-xmlrpc.php
-license.txt
-readme.html
+# Ignore everything by default
+*
 
-# WordPress Configuration
-# Note: wp-config.php contains sensitive data and should use environment variables
-wp-config.php
-.htaccess
+# Keep Git metadata/config
+!.gitignore
+!.gitattributes
+!.github/
+!.github/**
 
-# Keep only custom themes (exclude default WordPress themes)
-wp-content/themes/twentytwenty*
-wp-content/themes/twenty*
+# Allow documentation files if needed
+!README.md
+!README/*.md
 
-# Allow themes directory structure and custom themes
-!wp-content/themes/
-!wp-content/themes/index.php
-!wp-content/themes/multisite01/
-!wp-content/themes/multisite01/**
+# Allow WordPress public directory
+!public/
+public/*
 
-# Exclude default plugins and languages (already on Lightsail)
-wp-content/plugins/
-wp-content/languages/
+# Allow wp-content
+!public/wp-content/
+public/wp-content/*
 
-# WordPress Uploads
-wp-content/uploads/
-wp-content/blogs.dir/
-wp-content/upgrade/
-wp-content/backup-db/
-wp-content/advanced-cache.php
-wp-content/wp-cache-config.php
-wp-content/cache/
-wp-content/cache/supercache/
+# Allow all themes under wp-content/themes
+!public/wp-content/themes/
+!public/wp-content/themes/**
 
-# WordPress Debug Log
-wp-content/debug.log
-
-# WordPress Temporary Files
-*.log
-*.tmp
-*.temp
-
-# OS Files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-*~
-
-# IDE Files
-.idea/
-.vscode/
-*.swp
-*.swo
-*.swn
-.project
-.classpath
-.settings/
-
-# Node modules (if using build tools)
-node_modules/
-npm-debug.log
-yarn-error.log
-
-# Environment files
-.env
-.env.local
-.env.*.local
-
-# Backup files
-*.bak
-*.backup
-*.old
-*.orig
-
-# Compressed files
-*.zip
-*.tar
-*.tar.gz
-*.gz
-
-# Database dumps
-*.sql
-*.sql.gz
-# Exception: database setup template
-!database-setup.sql
-
-# PHP specific
-vendor/
-composer.lock
-
-# Build files
-dist/
-build/
-
-# Local development
-local-config.php
-wp-config-local.php
+# Re-ignore OS metadata files inside allowed directories
+.github/.DS_Store
+public/wp-content/themes/**/.DS_Store
+public/wp-content/themes/**/Thumbs.db
 

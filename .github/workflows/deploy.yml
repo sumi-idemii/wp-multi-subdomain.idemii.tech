@@ -59,7 +59,7 @@ jobs:
 
       - name: Create theme archive
         run: |
-          cd wp-content/themes
+          cd public/wp-content/themes
           # テーマファイルをアーカイブ（デフォルトテーマを除外）
           tar -czf /tmp/themes.tar.gz \
             --exclude='.git' \
