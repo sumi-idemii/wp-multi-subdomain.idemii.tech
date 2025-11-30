@@ -6,7 +6,7 @@
 get_header();
 ?>
 
-<p>テンプレート：/single.php</p>
+<p class="temp-name">テンプレート：/single.php</p>
 
 <?php
 get_footer(); 

@@ -7,7 +7,7 @@ $pages_data = get_cached_pages_data();
 $footer_list = ['news', 'admissions', 'academics', 'research', 'campus', 'about'];
 
 ?>
-<p>/template-parts/footer.php</p>
+<p class="temp-name">/template-parts/footer.php</p>
 <?php display_breadcrumb(); ?>
     </body>
 </html>

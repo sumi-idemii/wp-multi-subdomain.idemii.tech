@@ -29,7 +29,7 @@ $meta = get_meta();
         <?php wp_head(); ?>
     </head>
     <body <?php body_class(); ?>>
-<p>/header.php</p>
+<p class="temp-name">テンプレート：/header.php</p>
         <?php wp_body_open(); ?>
         <?php include(get_template_directory() . '/template-parts/header-gtm-body.php'); ?>
         <a class="move-main" href="#content" tabindex="1">コンテンツに移動</a>

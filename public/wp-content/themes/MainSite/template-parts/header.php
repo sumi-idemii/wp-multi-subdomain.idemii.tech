@@ -4,7 +4,7 @@ $pages_data = get_cached_pages_data();
 // 改修箇所
 $header_list = ['news', 'admissions', 'academics', 'research', 'campus', 'about', 'test'];
 ?>
-<p>/template-parts/header.php</p>
+<p class="temp-name">/template-parts/header.php</p>
 <?php foreach ($header_list as $list) :
             if (!empty($pages_data[$list])) :
               $page_list = $pages_data[$list]; // 配列の最初の要素を取得

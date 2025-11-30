@@ -1,4 +1,4 @@
-<p>/template-parts/page-lv3.php</p>
+<p class="temp-name">/template-parts/page-lv3.php</p>
 <?php
 
 the_post();

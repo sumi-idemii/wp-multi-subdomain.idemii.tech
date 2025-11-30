@@ -10,7 +10,7 @@
 get_header();
 
 ?>
-<p>テンプレート：/home.php</p>
+<p class="temp-name">テンプレート：/home.php</p>
 
 <?php
 get_footer();

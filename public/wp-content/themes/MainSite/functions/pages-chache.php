@@ -70,8 +70,9 @@ function get_cached_pages_data() {
         });
         $result[$slug] = reset($filtered); // 見つかった場合は配列の最初の要素、見つからない場合はfalse
     }
-    //改修箇所
+    //改修箇所　下層ナビゲーションの表示？
     // newsが存在する場合のみchildrenを設定
+    /*
     if (!empty($result['news'])) {
         $result['news']['children'] = array(
         array(  
@@ -96,6 +97,7 @@ function get_cached_pages_data() {
         ),
         );
     }
+        */
 
     // キャッシュに保存
     //改修箇所

@@ -4,7 +4,7 @@
  */
 get_header();
 ?>
-<p>/index.php</p>
+<p class="temp-name">テンプレート：/index.php</p>
 <main>
     <?php
     if (have_posts()) :

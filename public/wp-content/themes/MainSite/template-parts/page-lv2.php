@@ -1,4 +1,4 @@
-<p>/template-parts/page-lv2.php</p>
+<p class="temp-name">/template-parts/page-lv2.php</p>
 <?php
 the_post();
 $page_title = get_the_title();

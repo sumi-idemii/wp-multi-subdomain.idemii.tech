@@ -10,7 +10,7 @@
 
 get_header();
 ?>
-<p>テンプレート：/archive.php</p>
+<p class="temp-name">テンプレート：/archive.php</p>
 
 <?php
 get_footer();
