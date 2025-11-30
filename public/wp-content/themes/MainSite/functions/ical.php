@@ -1,0 +1,329 @@
+<?php
+/**
+ * iCalファイル生成機能
+ * イベントをカレンダーに追加するための機能
+ */
+
+/**
+ * iCalファイルを生成してダウンロード
+ */
+function generate_ical_file() {
+    // 投稿IDを取得
+    $post_id = isset($_GET['post_id']) ? intval($_GET['post_id']) : 0;
+    
+    if (!$post_id) {
+        wp_die('Invalid post ID');
+    }
+    
+    $post = get_post($post_id);
+    if (!$post || $post->post_type !== 'events') {
+        wp_die('Invalid event post');
+    }
+    
+    // タイトル
+    $title = get_the_title($post_id);
+    
+    // 説明（本文の最初の200文字）
+    $description = wp_strip_all_tags(get_the_excerpt($post_id));
+    if (empty($description)) {
+        $content = get_post_field('post_content', $post_id);
+        $description = wp_trim_words(wp_strip_all_tags($content), 30);
+    }
+    
+    // URL
+    $url = get_permalink($post_id);
+    
+    // 複数の日程セットを取得（1〜12まで対応）
+    $event_schedules = get_event_schedules($post_id);
+    
+    // iCalファイルの内容を生成
+    $ical_content = "BEGIN:VCALENDAR\r\n";
+    $ical_content .= "VERSION:2.0\r\n";
+    $ical_content .= "PRODID:-//WordPress//Event Calendar//EN\r\n";
+    $ical_content .= "CALSCALE:GREGORIAN\r\n";
+    $ical_content .= "METHOD:PUBLISH\r\n";
+    $ical_content .= "BEGIN:VTIMEZONE\r\n";
+    $ical_content .= "TZID:Asia/Tokyo\r\n";
+    $ical_content .= "BEGIN:STANDARD\r\n";
+    $ical_content .= "DTSTART:19700101T000000\r\n";
+    $ical_content .= "TZOFFSETFROM:+0900\r\n";
+    $ical_content .= "TZOFFSETTO:+0900\r\n";
+    $ical_content .= "TZNAME:JST\r\n";
+    $ical_content .= "END:STANDARD\r\n";
+    $ical_content .= "END:VTIMEZONE\r\n";
+    
+    // 各日程セットに対してVEVENTを作成
+    $timezone = new DateTimeZone('Asia/Tokyo');
+    $base_uid = 'event-' . $post_id . '@' . parse_url(home_url(), PHP_URL_HOST);
+    
+    foreach ($event_schedules as $index => $schedule) {
+        if (empty($schedule['start_date'])) {
+            continue; // 開始日がなければスキップ
+        }
+        
+        // 日時を解析（events_start_dateとevents_end_dateから直接取得）
+        $start_datetime = parse_datetime_from_field($schedule['start_date']);
+        $end_datetime = parse_datetime_from_field($schedule['end_date']);
+        
+        if (!$start_datetime) {
+            continue; // 開始日時が無効な場合はスキップ
+        }
+        
+        // 終了日時がない場合は開始日時+1時間
+        if (!$end_datetime) {
+            $end_datetime = clone $start_datetime;
+            $end_datetime->modify('+1 hour');
+        }
+        
+        // iCal形式の日時（ローカル時間形式: YYYYMMDDTHHMMSS）
+        $start_dt = clone $start_datetime;
+        $start_dt->setTimezone($timezone);
+        $end_dt = clone $end_datetime;
+        $end_dt->setTimezone($timezone);
+        
+        $start_ical = $start_dt->format('Ymd\THis');
+        $end_ical = $end_dt->format('Ymd\THis');
+        
+        // UID（一意のID、複数の日程がある場合は番号を追加）
+        $uid = $base_uid . '-' . ($index + 1);
+        
+        // VEVENTを作成
+        $ical_content .= "BEGIN:VEVENT\r\n";
+        $ical_content .= "UID:" . $uid . "\r\n";
+        $ical_content .= "DTSTART;TZID=Asia/Tokyo:" . $start_ical . "\r\n";
+        $ical_content .= "DTEND;TZID=Asia/Tokyo:" . $end_ical . "\r\n";
+        $ical_content .= "DTSTAMP:" . date('Ymd\THis\Z') . "\r\n";
+        $ical_content .= "SUMMARY:" . escape_ical_text($title) . "\r\n";
+        if (!empty($description)) {
+            $ical_content .= "DESCRIPTION:" . escape_ical_text($description) . "\r\n";
+        }
+        if (!empty($schedule['location'])) {
+            $ical_content .= "LOCATION:" . escape_ical_text($schedule['location']) . "\r\n";
+        }
+        if (!empty($url)) {
+            $ical_content .= "URL:" . $url . "\r\n";
+        }
+        $ical_content .= "END:VEVENT\r\n";
+    }
+    
+    $ical_content .= "END:VCALENDAR\r\n";
+    
+    // ファイル名
+    $filename = 'event-' . $post_id . '.ics';
+    
+    // ヘッダーを設定
+    header('Content-Type: text/calendar; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Content-Length: ' . strlen($ical_content));
+    
+    // 出力
+    echo $ical_content;
+    exit;
+}
+
+/**
+ * ACFの日時フィールドからDateTimeオブジェクトを生成
+ * 
+ * @param string $datetime_string 日時文字列（ACFの日時フィールド形式）
+ * @return DateTime|false DateTimeオブジェクト、失敗時はfalse
+ */
+function parse_datetime_from_field($datetime_string) {
+    if (empty($datetime_string)) {
+        return false;
+    }
+    
+    $timezone = new DateTimeZone('Asia/Tokyo');
+    
+    // ACFの日時フィールドは通常 'Y-m-d H:i:s' 形式（例：'2025-11-28 14:00:00'）
+    // または 'Ymd' 形式（例：'20251128'）の場合もある
+    $datetime = false;
+    
+    // 形式1: 'Y-m-d H:i:s' または 'Y-m-d H:i' 形式
+    if (preg_match('/^\d{4}-\d{2}-\d{2}[\sT]\d{2}:\d{2}(:\d{2})?/', $datetime_string)) {
+        $datetime = DateTime::createFromFormat('Y-m-d H:i:s', $datetime_string, $timezone);
+        if (!$datetime) {
+            $datetime = DateTime::createFromFormat('Y-m-d H:i', $datetime_string, $timezone);
+        }
+    }
+    // 形式2: 'YmdHis' 形式（例：'20251128140000'）
+    elseif (preg_match('/^\d{14}$/', $datetime_string)) {
+        $datetime = DateTime::createFromFormat('YmdHis', $datetime_string, $timezone);
+    }
+    // 形式3: 'Ymd' 形式（例：'20251128'）- 時刻がない場合は00:00:00
+    elseif (preg_match('/^\d{8}$/', $datetime_string)) {
+        $datetime = DateTime::createFromFormat('Ymd', $datetime_string, $timezone);
+        if ($datetime) {
+            $datetime->setTime(0, 0, 0);
+        }
+    }
+    // 形式4: その他の形式を試す
+    else {
+        $datetime = new DateTime($datetime_string, $timezone);
+    }
+    
+    return $datetime;
+}
+
+/**
+ * イベントの複数の日程セットを取得
+ * ACFフィールドが1〜12まで存在する場合に対応
+ * events_venueはすべての日程で共通
+ * 
+ * @param int $post_id 投稿ID
+ * @return array 日程セットの配列
+ */
+function get_event_schedules($post_id) {
+    $schedules = array();
+    
+    // 共通の会場を取得（events_venue、サフィックスなし）
+    $common_venue_field = get_field('events_venue', $post_id);
+    $common_location = '';
+    
+    if ($common_venue_field) {
+        if (is_array($common_venue_field)) {
+            $venue_ids = $common_venue_field;
+        } else {
+            $venue_ids = array($common_venue_field);
+        }
+        
+        $venue_names = array();
+        foreach ($venue_ids as $venue_id) {
+            $term = get_term($venue_id, 'events-venue');
+            if ($term && !is_wp_error($term)) {
+                $venue_names[] = $term->name;
+            }
+        }
+        $common_location = implode(', ', $venue_names);
+    }
+    
+    // 1〜12までのフィールドをチェック
+    for ($i = 1; $i <= 12; $i++) {
+        $suffix = ($i === 1) ? '' : '_' . $i; // 1番目はサフィックスなし、2番目以降は_2, _3...
+        
+        $start_date = get_field('events_start_date' . $suffix, $post_id);
+        $end_date = get_field('events_end_date' . $suffix, $post_id);
+        $date_text = get_field('events_date_text' . $suffix, $post_id); // 補足テキスト（iCalでは使用しない）
+        
+        // 開始日時が存在する場合のみ追加
+        if (!empty($start_date)) {
+            $schedules[] = array(
+                'start_date' => $start_date,
+                'end_date' => $end_date,
+                'date_text' => $date_text, // 補足テキスト（表示用）
+                'location' => $common_location, // 共通の会場を使用
+            );
+        }
+    }
+    
+    return $schedules;
+}
+
+/**
+ * iCalテキストのエスケープ
+ */
+function escape_ical_text($text) {
+    $text = str_replace('\\', '\\\\', $text);
+    $text = str_replace(',', '\\,', $text);
+    $text = str_replace(';', '\\;', $text);
+    $text = str_replace("\n", '\\n', $text);
+    return $text;
+}
+
+/**
+ * Googleカレンダー用のURLを生成
+ * 複数の日程がある場合は最初の日程を使用
+ * 
+ * @param int $post_id 投稿ID
+ * @param int $schedule_index 日程のインデックス（0から始まる、デフォルトは0=最初の日程）
+ * @return string GoogleカレンダーURL
+ */
+function get_google_calendar_url($post_id, $schedule_index = 0) {
+    $post = get_post($post_id);
+    if (!$post) {
+        return '';
+    }
+    
+    // イベント情報を取得
+    $title = urlencode(get_the_title($post_id));
+    
+    // 複数の日程セットを取得
+    $schedules = get_event_schedules($post_id);
+    
+    // 指定されたインデックスの日程を使用（存在しない場合は最初の日程）
+    if (empty($schedules) || !isset($schedules[$schedule_index])) {
+        $schedule_index = 0;
+    }
+    
+    if (empty($schedules)) {
+        return '';
+    }
+    
+    $schedule = $schedules[$schedule_index];
+    
+    // 日時を解析（events_start_dateとevents_end_dateから直接取得）
+    $start_datetime = parse_datetime_from_field($schedule['start_date']);
+    $end_datetime = parse_datetime_from_field($schedule['end_date']);
+    
+    if (!$start_datetime) {
+        return '';
+    }
+    
+    // 終了日時がない場合は開始日時+1時間
+    if (!$end_datetime) {
+        $end_datetime = clone $start_datetime;
+        $end_datetime->modify('+1 hour');
+    }
+    
+    // Googleカレンダー形式の日時（YYYYMMDDTHHMMSS）
+    $start_google = $start_datetime->format('Ymd\THis');
+    $end_google = $end_datetime->format('Ymd\THis');
+    
+    // 場所を取得
+    $location = urlencode($schedule['location']);
+    
+    // URL
+    $url = urlencode(get_permalink($post_id));
+    
+    // 説明
+    $description = wp_strip_all_tags(get_the_excerpt($post_id));
+    if (empty($description)) {
+        $content = get_post_field('post_content', $post_id);
+        $description = wp_trim_words(wp_strip_all_tags($content), 30);
+    }
+    $description = urlencode($description);
+    
+    // GoogleカレンダーURLを生成
+    $google_url = 'https://www.google.com/calendar/render?action=TEMPLATE';
+    $google_url .= '&text=' . $title;
+    $google_url .= '&dates=' . $start_google . '/' . $end_google;
+    if (!empty($location)) {
+        $google_url .= '&location=' . $location;
+    }
+    $google_url .= '&details=' . $description;
+    $google_url .= '&sf=true&output=xml';
+    
+    return $google_url;
+}
+
+/**
+ * iCalファイルのURLを生成
+ * 
+ * @param int $post_id 投稿ID
+ * @return string iCalファイルURL
+ */
+function get_ical_file_url($post_id) {
+    return add_query_arg(array(
+        'ical_download' => '1',
+        'post_id' => $post_id
+    ), home_url('/'));
+}
+
+/**
+ * iCalダウンロードのリクエストを処理
+ */
+add_action('init', function() {
+    if (isset($_GET['ical_download']) && isset($_GET['post_id'])) {
+        generate_ical_file();
+    }
+});
+

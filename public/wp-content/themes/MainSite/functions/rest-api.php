@@ -13,6 +13,7 @@ add_filter('acf/rest_api/field_settings/show_in_rest', '__return_true');
 /**
  * カスタム投稿タイプのREST APIレスポンスにACFフィールドを追加
  * タクソノミーフィールドの値をターム名に変換
+ * events投稿タイプの場合は複数の日程セットを配列として追加
  */
 function add_acf_fields_to_rest_api($data, $post, $request) {
     // ACFプラグインが有効な場合のみ実行
@@ -52,6 +53,12 @@ function add_acf_fields_to_rest_api($data, $post, $request) {
                     }
                 }
             }
+        }
+        
+        // events投稿タイプの場合は複数の日程セットを追加
+        if ($post->post_type === 'events' && function_exists('get_event_schedules')) {
+            $schedules = get_event_schedules($post->ID);
+            $acf_fields['event_schedules'] = $schedules;
         }
         
         // ACFフィールドをレスポンスに追加
