@@ -67,11 +67,18 @@ function generate_ical_file() {
         }
         
         // UTC形式に変換（Appleカレンダー対応のため）
+        // 日本時間（JST）からUTCに変換（9時間差）
+        // parse_datetime_from_fieldはAsia/Tokyoタイムゾーンで作成されている
+        // 確実にUTC変換するため、タイムゾーンを明示的に指定
+        $jst_timezone = new DateTimeZone('Asia/Tokyo');
         $utc_timezone = new DateTimeZone('UTC');
-        $start_utc = clone $start_datetime;
-        $start_utc->setTimezone($utc_timezone);
-        $end_utc = clone $end_datetime;
-        $end_utc->setTimezone($utc_timezone);
+        
+        // 日本時間として明示的に作成してからUTCに変換
+        $start_jst = new DateTime($start_datetime->format('Y-m-d H:i:s'), $jst_timezone);
+        $start_utc = $start_jst->setTimezone($utc_timezone);
+        
+        $end_jst = new DateTime($end_datetime->format('Y-m-d H:i:s'), $jst_timezone);
+        $end_utc = $end_jst->setTimezone($utc_timezone);
         
         // iCal形式の日時（UTC形式: YYYYMMDDTHHMMSSZ）
         $start_ical = $start_utc->format('Ymd\THis\Z');
@@ -128,29 +135,53 @@ function parse_datetime_from_field($datetime_string) {
     
     $timezone = new DateTimeZone('Asia/Tokyo');
     
-    // ACFの日時フィールドは通常 'Y-m-d H:i:s' 形式（例：'2025-11-28 14:00:00'）
-    // または 'Ymd' 形式（例：'20251128'）の場合もある
+    // ACFの日時フィールドは複数の形式に対応
+    // 'Y/m/d H:i:s' (例：'2025/11/06 14:00:00')
+    // 'Y-m-d H:i:s' (例：'2025-11-28 14:00:00')
+    // 'Y-m-d-H:i:s' (例：'2025-11-13-14:00:00') - ACFの特殊形式
+    // 'Ymd' (例：'20251128')
     $datetime = false;
     
-    // 形式1: 'Y-m-d H:i:s' または 'Y-m-d H:i' 形式
-    if (preg_match('/^\d{4}-\d{2}-\d{2}[\sT]\d{2}:\d{2}(:\d{2})?/', $datetime_string)) {
+    // 形式1: 'Y-m-d-H:i:s' 形式（ハイフン3つ、ACFの特殊形式）
+    if (preg_match('/^(\d{4})-(\d{2})-(\d{2})-(\d{2}):(\d{2})(:(\d{2}))?$/', $datetime_string, $matches)) {
+        // ハイフンをスペースに置換してからパース
+        $normalized = $matches[1] . '-' . $matches[2] . '-' . $matches[3] . ' ' . $matches[4] . ':' . $matches[5];
+        if (isset($matches[7])) {
+            $normalized .= ':' . $matches[7];
+        } else {
+            $normalized .= ':00';
+        }
+        $datetime = DateTime::createFromFormat('Y-m-d H:i:s', $normalized, $timezone);
+        if (!$datetime) {
+            $datetime = DateTime::createFromFormat('Y-m-d H:i', $normalized, $timezone);
+        }
+    }
+    // 形式2: 'Y/m/d H:i:s' または 'Y/m/d H:i' 形式（スラッシュ区切り）
+    elseif (preg_match('/^\d{4}\/\d{2}\/\d{2}[\sT]\d{2}:\d{2}(:\d{2})?/', $datetime_string)) {
+        $datetime = DateTime::createFromFormat('Y/m/d H:i:s', $datetime_string, $timezone);
+        if (!$datetime) {
+            $datetime = DateTime::createFromFormat('Y/m/d H:i', $datetime_string, $timezone);
+        }
+    }
+    // 形式3: 'Y-m-d H:i:s' または 'Y-m-d H:i' 形式（ハイフン区切り、通常形式）
+    elseif (preg_match('/^\d{4}-\d{2}-\d{2}[\sT]\d{2}:\d{2}(:\d{2})?/', $datetime_string)) {
         $datetime = DateTime::createFromFormat('Y-m-d H:i:s', $datetime_string, $timezone);
         if (!$datetime) {
             $datetime = DateTime::createFromFormat('Y-m-d H:i', $datetime_string, $timezone);
         }
     }
-    // 形式2: 'YmdHis' 形式（例：'20251128140000'）
+    // 形式4: 'YmdHis' 形式（例：'20251128140000'）
     elseif (preg_match('/^\d{14}$/', $datetime_string)) {
         $datetime = DateTime::createFromFormat('YmdHis', $datetime_string, $timezone);
     }
-    // 形式3: 'Ymd' 形式（例：'20251128'）- 時刻がない場合は00:00:00
+    // 形式5: 'Ymd' 形式（例：'20251128'）- 時刻がない場合は00:00:00
     elseif (preg_match('/^\d{8}$/', $datetime_string)) {
         $datetime = DateTime::createFromFormat('Ymd', $datetime_string, $timezone);
         if ($datetime) {
             $datetime->setTime(0, 0, 0);
         }
     }
-    // 形式4: その他の形式を試す
+    // 形式6: その他の形式を試す
     else {
         $datetime = new DateTime($datetime_string, $timezone);
     }
