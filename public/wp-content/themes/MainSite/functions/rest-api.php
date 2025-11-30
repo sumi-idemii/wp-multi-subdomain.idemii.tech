@@ -12,6 +12,7 @@ add_filter('acf/rest_api/field_settings/show_in_rest', '__return_true');
 
 /**
  * カスタム投稿タイプのREST APIレスポンスにACFフィールドを追加
+ * タクソノミーフィールドの値をターム名に変換
  */
 function add_acf_fields_to_rest_api($data, $post, $request) {
     // ACFプラグインが有効な場合のみ実行
@@ -23,8 +24,106 @@ function add_acf_fields_to_rest_api($data, $post, $request) {
     $acf_fields = get_fields($post->ID);
     
     if ($acf_fields) {
+        // タクソノミーフィールドの値をターム名に変換
+        foreach ($acf_fields as $field_name => $field_value) {
+            // フィールドの設定を取得
+            $field_object = get_field_object($field_name, $post->ID);
+            
+            // タクソノミーフィールドの場合
+            if ($field_object && $field_object['type'] === 'taxonomy') {
+                $taxonomy = $field_object['taxonomy'];
+                
+                // タームIDの配列の場合、ターム名の配列に変換
+                if (is_array($field_value) && !empty($field_value)) {
+                    $term_names = array();
+                    foreach ($field_value as $term_id) {
+                        $term = get_term($term_id, $taxonomy);
+                        if ($term && !is_wp_error($term)) {
+                            // ターム名を配列に追加
+                            $term_names[] = $term->name;
+                        }
+                    }
+                    $acf_fields[$field_name] = $term_names;
+                } elseif (is_numeric($field_value)) {
+                    // 単一のタームIDの場合
+                    $term = get_term($field_value, $taxonomy);
+                    if ($term && !is_wp_error($term)) {
+                        $acf_fields[$field_name] = $term->name;
+                    }
+                }
+            }
+        }
+        
         // ACFフィールドをレスポンスに追加
         $data->data['acf'] = $acf_fields;
+    }
+
+    return $data;
+}
+
+/**
+ * REST APIレスポンスのルートレベルのタクソノミーフィールドをターム名に変換
+ * ACFが自動的に追加したタクソノミーフィールドを変換
+ */
+function convert_taxonomy_fields_to_names($data, $post, $request) {
+    // ACFプラグインが有効な場合のみ実行
+    if (!function_exists('get_field_object')) {
+        return $data;
+    }
+
+    // データ配列内のすべてのキーをチェック
+    if (isset($data->data) && is_array($data->data)) {
+        foreach ($data->data as $field_name => $field_value) {
+            // フィールド名がタクソノミー名と一致する可能性がある場合
+            // ACFのタクソノミーフィールドは通常、タクソノミー名と同じ名前になる
+            $taxonomy = $field_name;
+            
+            // タクソノミーが存在し、値が数値の配列または数値の場合
+            if (taxonomy_exists($taxonomy)) {
+                // タームIDの配列の場合、ターム名の配列に変換
+                if (is_array($field_value) && !empty($field_value) && is_numeric($field_value[0])) {
+                    $term_names = array();
+                    foreach ($field_value as $term_id) {
+                        $term = get_term($term_id, $taxonomy);
+                        if ($term && !is_wp_error($term)) {
+                            $term_names[] = $term->name;
+                        }
+                    }
+                    $data->data[$field_name] = $term_names;
+                } elseif (is_numeric($field_value)) {
+                    // 単一のタームIDの場合
+                    $term = get_term($field_value, $taxonomy);
+                    if ($term && !is_wp_error($term)) {
+                        $data->data[$field_name] = $term->name;
+                    }
+                }
+            } else {
+                // タクソノミーが直接存在しない場合、ACFフィールドとして確認
+                $field_object = get_field_object($field_name, $post->ID);
+                
+                if ($field_object && $field_object['type'] === 'taxonomy') {
+                    $taxonomy = $field_object['taxonomy'];
+                    
+                    // タームIDの配列の場合、ターム名の配列に変換
+                    if (is_array($field_value) && !empty($field_value) && is_numeric($field_value[0])) {
+                        $term_names = array();
+                        foreach ($field_value as $term_id) {
+                            $term = get_term($term_id, $taxonomy);
+                            if ($term && !is_wp_error($term)) {
+                                $term_names[] = $term->name;
+                            }
+                        }
+                        $data->data[$field_name] = $term_names;
+                    } elseif (is_numeric($field_value)) {
+                        // 単一のタームIDの場合
+                        $term = get_term($field_value, $taxonomy);
+                        if ($term && !is_wp_error($term)) {
+                            $data->data[$field_name] = $term->name;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     return $data;
@@ -34,64 +133,16 @@ function add_acf_fields_to_rest_api($data, $post, $request) {
 add_filter('rest_prepare_post', 'add_acf_fields_to_rest_api', 10, 3);
 add_filter('rest_prepare_page', 'add_acf_fields_to_rest_api', 10, 3);
 
-// カスタム投稿タイプにも適用（例: news）
+// カスタム投稿タイプにも適用
 add_filter('rest_prepare_news', 'add_acf_fields_to_rest_api', 10, 3);
+add_filter('rest_prepare_events', 'add_acf_fields_to_rest_api', 10, 3);
 
-/**
- * タクソノミーフィールドをREST APIに表示する
- * ACFのタクソノミーフィールドの値を取得して表示
- */
-function add_taxonomy_field_to_rest_api($data, $post, $request) {
-    // ACFプラグインが有効な場合のみ実行
-    if (!function_exists('get_field')) {
-        return $data;
-    }
+// ルートレベルのタクソノミーフィールドを変換（ACFが自動追加したフィールド用）
+add_filter('rest_prepare_post', 'convert_taxonomy_fields_to_names', 20, 3);
+add_filter('rest_prepare_page', 'convert_taxonomy_fields_to_names', 20, 3);
+add_filter('rest_prepare_news', 'convert_taxonomy_fields_to_names', 20, 3);
+add_filter('rest_prepare_events', 'convert_taxonomy_fields_to_names', 20, 3);
 
-    // 投稿に紐づくすべてのACFフィールドを取得
-    $fields = get_fields($post->ID);
-    
-    if ($fields) {
-        foreach ($fields as $field_name => $field_value) {
-            // フィールドの設定を取得
-            $field_object = get_field_object($field_name, $post->ID);
-            
-            // タクソノミーフィールドの場合
-            if ($field_object && $field_object['type'] === 'taxonomy') {
-                // タクソノミーのターム情報を取得
-                $taxonomy = $field_object['taxonomy'];
-                $terms = wp_get_post_terms($post->ID, $taxonomy, array('fields' => 'all'));
-                
-                // ターム情報を整形
-                $term_data = array();
-                foreach ($terms as $term) {
-                    $term_data[] = array(
-                        'id' => $term->term_id,
-                        'name' => $term->name,
-                        'slug' => $term->slug,
-                        'taxonomy' => $taxonomy,
-                    );
-                }
-                
-                // ACFフィールドが存在しない場合は初期化
-                if (!isset($data->data['acf'])) {
-                    $data->data['acf'] = array();
-                }
-                
-                // タクソノミーフィールドの値を追加
-                $data->data['acf'][$field_name] = $term_data;
-            }
-        }
-    }
-
-    return $data;
-}
-
-// すべての投稿タイプに対してタクソノミーフィールドを追加
-add_filter('rest_prepare_post', 'add_taxonomy_field_to_rest_api', 20, 3);
-add_filter('rest_prepare_page', 'add_taxonomy_field_to_rest_api', 20, 3);
-
-// カスタム投稿タイプにも適用（例: news）
-add_filter('rest_prepare_news', 'add_taxonomy_field_to_rest_api', 20, 3);
 
 /**
  * タクソノミー自体をREST APIで公開する
