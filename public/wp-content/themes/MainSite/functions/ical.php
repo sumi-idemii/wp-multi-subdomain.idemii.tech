@@ -36,6 +36,23 @@ function generate_ical_file() {
     // 複数の日程セットを取得（1〜12まで対応）
     $event_schedules = get_event_schedules($post_id);
     
+    // スケジュールが空の場合は空のVCALENDARを返す（エラーではなく）
+    if (empty($event_schedules)) {
+        $ical_content = "BEGIN:VCALENDAR\r\n";
+        $ical_content .= "VERSION:2.0\r\n";
+        $ical_content .= "PRODID:-//WordPress//Event Calendar//EN\r\n";
+        $ical_content .= "CALSCALE:GREGORIAN\r\n";
+        $ical_content .= "METHOD:PUBLISH\r\n";
+        $ical_content .= "END:VCALENDAR\r\n";
+        
+        $filename = 'event-' . $post_id . '.ics';
+        header('Content-Type: text/calendar; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Content-Length: ' . strlen($ical_content));
+        echo $ical_content;
+        exit;
+    }
+    
     // iCalファイルの内容を生成
     $ical_content = "BEGIN:VCALENDAR\r\n";
     $ical_content .= "VERSION:2.0\r\n";
@@ -57,7 +74,8 @@ function generate_ical_file() {
         $end_datetime = parse_datetime_from_field($schedule['end_date']);
         
         if (!$start_datetime) {
-            continue; // 開始日時が無効な場合はスキップ
+            // パース失敗の場合はスキップ（エラーログは本番環境では出力しない）
+            continue;
         }
         
         // 終了日時がない場合は開始日時+1時間
@@ -162,6 +180,10 @@ function parse_datetime_from_field($datetime_string) {
         if (!$datetime) {
             $datetime = DateTime::createFromFormat('Y/m/d H:i', $datetime_string, $timezone);
         }
+        if (!$datetime) {
+            // 秒がない場合のフォールバック
+            $datetime = DateTime::createFromFormat('Y/m/d H:i:s', $datetime_string . ':00', $timezone);
+        }
     }
     // 形式3: 'Y-m-d H:i:s' または 'Y-m-d H:i' 形式（ハイフン区切り、通常形式）
     elseif (preg_match('/^\d{4}-\d{2}-\d{2}[\sT]\d{2}:\d{2}(:\d{2})?/', $datetime_string)) {
@@ -181,9 +203,29 @@ function parse_datetime_from_field($datetime_string) {
             $datetime->setTime(0, 0, 0);
         }
     }
-    // 形式6: その他の形式を試す
+    // 形式6: その他の形式を試す（最後の手段）
     else {
-        $datetime = new DateTime($datetime_string, $timezone);
+        // 様々な形式を試す
+        $formats = array(
+            'Y/m/d H:i:s',
+            'Y-m-d H:i:s',
+            'Y/m/d H:i',
+            'Y-m-d H:i',
+            'YmdHis',
+            'Ymd',
+        );
+        
+        foreach ($formats as $format) {
+            $datetime = DateTime::createFromFormat($format, $datetime_string, $timezone);
+            if ($datetime) {
+                break;
+            }
+        }
+        
+        // それでも失敗した場合は、DateTimeのコンストラクタに任せる
+        if (!$datetime) {
+            $datetime = new DateTime($datetime_string, $timezone);
+        }
     }
     
     return $datetime;
@@ -222,8 +264,9 @@ function get_event_schedules($post_id) {
     }
     
     // 1〜12までのフィールドをチェック
+    // ACFフィールド名は events_start_date_1, events_start_date_2, ... events_start_date_12 の形式
     for ($i = 1; $i <= 12; $i++) {
-        $suffix = ($i === 1) ? '' : '_' . $i; // 1番目はサフィックスなし、2番目以降は_2, _3...
+        $suffix = '_' . $i; // すべてのフィールドにサフィックスが付く（_1, _2, ..., _12）
         
         $start_date = get_field('events_start_date' . $suffix, $post_id);
         $end_date = get_field('events_end_date' . $suffix, $post_id);
