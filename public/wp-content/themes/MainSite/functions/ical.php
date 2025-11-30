@@ -42,15 +42,6 @@ function generate_ical_file() {
     $ical_content .= "PRODID:-//WordPress//Event Calendar//EN\r\n";
     $ical_content .= "CALSCALE:GREGORIAN\r\n";
     $ical_content .= "METHOD:PUBLISH\r\n";
-    $ical_content .= "BEGIN:VTIMEZONE\r\n";
-    $ical_content .= "TZID:Asia/Tokyo\r\n";
-    $ical_content .= "BEGIN:STANDARD\r\n";
-    $ical_content .= "DTSTART:19700101T000000\r\n";
-    $ical_content .= "TZOFFSETFROM:+0900\r\n";
-    $ical_content .= "TZOFFSETTO:+0900\r\n";
-    $ical_content .= "TZNAME:JST\r\n";
-    $ical_content .= "END:STANDARD\r\n";
-    $ical_content .= "END:VTIMEZONE\r\n";
     
     // 各日程セットに対してVEVENTを作成
     $timezone = new DateTimeZone('Asia/Tokyo');
@@ -75,14 +66,16 @@ function generate_ical_file() {
             $end_datetime->modify('+1 hour');
         }
         
-        // iCal形式の日時（ローカル時間形式: YYYYMMDDTHHMMSS）
-        $start_dt = clone $start_datetime;
-        $start_dt->setTimezone($timezone);
-        $end_dt = clone $end_datetime;
-        $end_dt->setTimezone($timezone);
+        // UTC形式に変換（Appleカレンダー対応のため）
+        $utc_timezone = new DateTimeZone('UTC');
+        $start_utc = clone $start_datetime;
+        $start_utc->setTimezone($utc_timezone);
+        $end_utc = clone $end_datetime;
+        $end_utc->setTimezone($utc_timezone);
         
-        $start_ical = $start_dt->format('Ymd\THis');
-        $end_ical = $end_dt->format('Ymd\THis');
+        // iCal形式の日時（UTC形式: YYYYMMDDTHHMMSSZ）
+        $start_ical = $start_utc->format('Ymd\THis\Z');
+        $end_ical = $end_utc->format('Ymd\THis\Z');
         
         // UID（一意のID、複数の日程がある場合は番号を追加）
         $uid = $base_uid . '-' . ($index + 1);
@@ -90,8 +83,8 @@ function generate_ical_file() {
         // VEVENTを作成
         $ical_content .= "BEGIN:VEVENT\r\n";
         $ical_content .= "UID:" . $uid . "\r\n";
-        $ical_content .= "DTSTART;TZID=Asia/Tokyo:" . $start_ical . "\r\n";
-        $ical_content .= "DTEND;TZID=Asia/Tokyo:" . $end_ical . "\r\n";
+        $ical_content .= "DTSTART:" . $start_ical . "\r\n";
+        $ical_content .= "DTEND:" . $end_ical . "\r\n";
         $ical_content .= "DTSTAMP:" . date('Ymd\THis\Z') . "\r\n";
         $ical_content .= "SEQUENCE:0\r\n";
         $ical_content .= format_ical_line("SUMMARY", escape_ical_text($title));
