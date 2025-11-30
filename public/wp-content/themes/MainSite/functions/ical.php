@@ -93,12 +93,13 @@ function generate_ical_file() {
         $ical_content .= "DTSTART;TZID=Asia/Tokyo:" . $start_ical . "\r\n";
         $ical_content .= "DTEND;TZID=Asia/Tokyo:" . $end_ical . "\r\n";
         $ical_content .= "DTSTAMP:" . date('Ymd\THis\Z') . "\r\n";
-        $ical_content .= "SUMMARY:" . escape_ical_text($title) . "\r\n";
+        $ical_content .= "SEQUENCE:0\r\n";
+        $ical_content .= format_ical_line("SUMMARY", escape_ical_text($title));
         if (!empty($description)) {
-            $ical_content .= "DESCRIPTION:" . escape_ical_text($description) . "\r\n";
+            $ical_content .= format_ical_line("DESCRIPTION", escape_ical_text($description));
         }
         if (!empty($schedule['location'])) {
-            $ical_content .= "LOCATION:" . escape_ical_text($schedule['location']) . "\r\n";
+            $ical_content .= format_ical_line("LOCATION", escape_ical_text($schedule['location']));
         }
         if (!empty($url)) {
             $ical_content .= "URL:" . $url . "\r\n";
@@ -222,11 +223,65 @@ function get_event_schedules($post_id) {
  * iCalテキストのエスケープ
  */
 function escape_ical_text($text) {
+    if (empty($text)) {
+        return '';
+    }
+    
+    // 改行を\\nに変換
+    $text = str_replace("\r\n", '\\n', $text);
+    $text = str_replace("\n", '\\n', $text);
+    $text = str_replace("\r", '\\n', $text);
+    
+    // 特殊文字をエスケープ
     $text = str_replace('\\', '\\\\', $text);
     $text = str_replace(',', '\\,', $text);
     $text = str_replace(';', '\\;', $text);
-    $text = str_replace("\n", '\\n', $text);
+    
     return $text;
+}
+
+/**
+ * iCal形式の行を生成（75文字ごとに折り返し）
+ * 
+ * @param string $name フィールド名（例：SUMMARY, DESCRIPTION）
+ * @param string $value 値
+ * @return string フォーマットされた行
+ */
+function format_ical_line($name, $value) {
+    if (empty($value)) {
+        return '';
+    }
+    
+    $line = $name . ':' . $value . "\r\n";
+    
+    // 75文字を超える場合は折り返し（最初の行はフィールド名を含むため短めに）
+    if (strlen($line) > 75) {
+        $lines = array();
+        $current_line = $name . ':';
+        $remaining = $value;
+        
+        while (strlen($remaining) > 0) {
+            // 現在の行に追加できる最大文字数
+            $max_length = 75 - strlen($current_line);
+            
+            if (strlen($remaining) <= $max_length) {
+                // 残りが全部入る場合
+                $current_line .= $remaining;
+                $lines[] = $current_line . "\r\n";
+                break;
+            } else {
+                // 折り返しが必要
+                $current_line .= substr($remaining, 0, $max_length);
+                $lines[] = $current_line . "\r\n";
+                $remaining = substr($remaining, $max_length);
+                $current_line = ' '; // 折り返し行はスペースで始まる
+            }
+        }
+        
+        return implode('', $lines);
+    }
+    
+    return $line;
 }
 
 /**
