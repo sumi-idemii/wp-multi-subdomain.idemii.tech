@@ -174,10 +174,15 @@ add_action('init', 'register_taxonomy_rest_api_support', 25);
 /**
  * CORSヘッダーを追加してクロスオリジンリクエストを許可
  * ローカルPCのWebサーバーからAPIを取得できるようにする
+ * 
+ * REST APIのパス（/wp-json/）をチェックして早期にヘッダーを送信
  */
 function add_cors_headers_to_rest_api() {
-    // REST APIリクエストでない場合は何もしない
-    if (!defined('REST_REQUEST') || !REST_REQUEST) {
+    // リクエストURIを取得
+    $request_uri = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
+    
+    // REST APIのパスでない場合は何もしない
+    if (strpos($request_uri, '/wp-json/') === false) {
         return;
     }
 
@@ -185,8 +190,10 @@ function add_cors_headers_to_rest_api() {
     // 必要に応じて特定のオリジンのみを許可するように変更可能
     $allowed_origins = array(
         'http://localhost',
+        'http://localhost:8000',
         'http://localhost:8080',
         'http://127.0.0.1',
+        'http://127.0.0.1:8000',
         'http://127.0.0.1:8080',
         // 本番環境のドメイン
         'https://wp-multi-subdomain.idemii.tech',
@@ -224,23 +231,31 @@ function add_cors_headers_to_rest_api() {
         exit;
     }
 }
-add_action('rest_api_init', 'add_cors_headers_to_rest_api', 15);
+// initアクションで早期に実行（rest_api_initより前）
+add_action('init', 'add_cors_headers_to_rest_api', 1);
+// template_redirectアクションでも実行（より確実に）
+add_action('template_redirect', 'add_cors_headers_to_rest_api', 1);
 
 /**
  * REST APIリクエストの前にCORSヘッダーを送信（早期実行）
  * send_headersアクションで確実にヘッダーを送信
  */
 function send_cors_headers_early() {
-    // REST APIリクエストでない場合は何もしない
-    if (!defined('REST_REQUEST') || !REST_REQUEST) {
+    // リクエストURIを取得
+    $request_uri = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
+    
+    // REST APIのパスでない場合は何もしない
+    if (strpos($request_uri, '/wp-json/') === false) {
         return;
     }
 
     // 許可するオリジンのリスト
     $allowed_origins = array(
         'http://localhost',
+        'http://localhost:8000',
         'http://localhost:8080',
         'http://127.0.0.1',
+        'http://127.0.0.1:8000',
         'http://127.0.0.1:8080',
         // 本番環境のドメイン
         'https://wp-multi-subdomain.idemii.tech',
