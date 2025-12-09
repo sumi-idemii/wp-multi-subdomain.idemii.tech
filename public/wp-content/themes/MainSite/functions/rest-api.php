@@ -171,3 +171,105 @@ function register_taxonomy_rest_api_support() {
 }
 add_action('init', 'register_taxonomy_rest_api_support', 25);
 
+/**
+ * CORSヘッダーを追加してクロスオリジンリクエストを許可
+ * ローカルPCのWebサーバーからAPIを取得できるようにする
+ */
+function add_cors_headers_to_rest_api() {
+    // REST APIリクエストでない場合は何もしない
+    if (!defined('REST_REQUEST') || !REST_REQUEST) {
+        return;
+    }
+
+    // 許可するオリジンのリスト
+    // 必要に応じて特定のオリジンのみを許可するように変更可能
+    $allowed_origins = array(
+        'http://localhost',
+        'http://localhost:8080',
+        'http://127.0.0.1',
+        'http://127.0.0.1:8080',
+        // 本番環境のドメイン
+        'https://wp-multi-subdomain.idemii.tech',
+        'http://wp-multi-subdomain.idemii.tech',
+    );
+
+    // リクエスト元のオリジンを取得
+    $origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
+
+    // 開発環境ではすべてのオリジンを許可（必要に応じて変更）
+    // 本番環境では特定のオリジンのみを許可することを推奨
+    $allow_all_origins = true; // 開発環境用：trueにするとすべてのオリジンを許可
+
+    if ($allow_all_origins) {
+        // すべてのオリジンを許可
+        header('Access-Control-Allow-Origin: *');
+    } else {
+        // 許可リストに含まれるオリジンのみ許可
+        if (in_array($origin, $allowed_origins)) {
+            header('Access-Control-Allow-Origin: ' . $origin);
+            // 認証情報を使用する場合は特定のオリジンのみ許可
+            header('Access-Control-Allow-Credentials: true');
+        }
+    }
+
+    // 許可するHTTPメソッド
+    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+
+    // 許可するHTTPヘッダー
+    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-WP-Nonce');
+
+    // プリフライトリクエスト（OPTIONS）の場合はここで終了
+    if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+        status_header(200);
+        exit;
+    }
+}
+add_action('rest_api_init', 'add_cors_headers_to_rest_api', 15);
+
+/**
+ * REST APIリクエストの前にCORSヘッダーを送信（早期実行）
+ * send_headersアクションで確実にヘッダーを送信
+ */
+function send_cors_headers_early() {
+    // REST APIリクエストでない場合は何もしない
+    if (!defined('REST_REQUEST') || !REST_REQUEST) {
+        return;
+    }
+
+    // 許可するオリジンのリスト
+    $allowed_origins = array(
+        'http://localhost',
+        'http://localhost:8080',
+        'http://127.0.0.1',
+        'http://127.0.0.1:8080',
+        // 本番環境のドメイン
+        'https://wp-multi-subdomain.idemii.tech',
+        'http://wp-multi-subdomain.idemii.tech',
+    );
+
+    // リクエスト元のオリジンを取得
+    $origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
+
+    // 開発環境ではすべてのオリジンを許可
+    $allow_all_origins = true;
+
+    if ($allow_all_origins) {
+        header('Access-Control-Allow-Origin: *');
+    } else {
+        if (in_array($origin, $allowed_origins)) {
+            header('Access-Control-Allow-Origin: ' . $origin);
+            header('Access-Control-Allow-Credentials: true');
+        }
+    }
+
+    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-WP-Nonce');
+
+    // OPTIONSリクエストの処理
+    if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+        status_header(200);
+        exit;
+    }
+}
+add_action('send_headers', 'send_cors_headers_early', 1);
+
