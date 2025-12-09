@@ -172,6 +172,71 @@ function register_taxonomy_rest_api_support() {
 add_action('init', 'register_taxonomy_rest_api_support', 25);
 
 /**
+ * カスタム投稿タイプをREST APIで公開する
+ * ACFで作成されたカスタム投稿タイプがREST APIで公開されていない場合に使用
+ */
+function register_custom_post_type_rest_api_support() {
+    // カスタム投稿タイプのリスト
+    $custom_post_types = array('events', 'news');
+    
+    foreach ($custom_post_types as $post_type) {
+        // 投稿タイプが存在する場合
+        if (post_type_exists($post_type)) {
+            // 投稿タイプのオブジェクトを取得
+            $post_type_object = get_post_type_object($post_type);
+            
+            // REST APIで公開されていない場合、公開する
+            if ($post_type_object && !$post_type_object->show_in_rest) {
+                $args = $post_type_object->to_array();
+                $args['show_in_rest'] = true;
+                $args['rest_base'] = $post_type;
+                $args['rest_controller_class'] = 'WP_REST_Posts_Controller';
+                
+                // 投稿タイプを再登録
+                register_post_type($post_type, $args);
+            }
+        }
+    }
+}
+// ACFがカスタム投稿タイプを登録した後に実行（優先度を高く設定）
+add_action('init', 'register_custom_post_type_rest_api_support', 30);
+
+/**
+ * REST APIの認証を緩和（公開エンドポイントを認証不要にする）
+ * カスタム投稿タイプの一覧取得を認証不要にする
+ */
+function allow_public_rest_api_access($result) {
+    // 既に認証されている場合はそのまま返す
+    if (!empty($result)) {
+        return $result;
+    }
+    
+    // リクエストURIを取得
+    $request_uri = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
+    
+    // 公開エンドポイント（一覧取得）の場合は認証をスキップ
+    $public_routes = array(
+        '/wp-json/wp/v2/events',
+        '/wp-json/wp/v2/events/',
+        '/wp-json/wp/v2/news',
+        '/wp-json/wp/v2/news/',
+    );
+    
+    foreach ($public_routes as $public_route) {
+        // 一覧取得のリクエスト（GETメソッド、かつ個別IDが含まれていない）
+        if (strpos($request_uri, $public_route) !== false && 
+            $_SERVER['REQUEST_METHOD'] === 'GET' && 
+            !preg_match('/\/\d+(\/|$)/', $request_uri)) {
+            // 認証をスキップ（nullを返す）
+            return null;
+        }
+    }
+    
+    return $result;
+}
+add_filter('rest_authentication_errors', 'allow_public_rest_api_access', 20, 1);
+
+/**
  * CORSヘッダーを追加してクロスオリジンリクエストを許可
  * ローカルPCのWebサーバーからAPIを取得できるようにする
  * 
