@@ -305,6 +305,114 @@ add_filter('rest_prepare_page', 'convert_taxonomy_fields_to_names', 20, 3);
 add_filter('rest_prepare_news', 'convert_taxonomy_fields_to_names', 20, 3);
 add_filter('rest_prepare_events', 'convert_taxonomy_fields_to_names', 20, 3);
 
+/**
+ * events投稿タイプのREST APIレスポンスでevents_teamタクソノミーにcolorを追加
+ * ターム名の配列になっている場合も処理する（優先度30で最後に実行）
+ */
+function add_color_to_events_team_in_rest_api($data, $post, $request) {
+    // events投稿タイプの場合のみ実行
+    if ($post->post_type !== 'events') {
+        return $data;
+    }
+
+    // ACFプラグインが有効な場合のみ実行
+    if (!function_exists('get_field')) {
+        return $data;
+    }
+
+    // events_teamタクソノミーが存在する場合
+    if (isset($data->data['events_team']) && !empty($data->data['events_team'])) {
+        $events_team = $data->data['events_team'];
+        $term_objects = array();
+
+        // 既にタームオブジェクトの配列になっている場合はスキップ
+        if (is_array($events_team) && !empty($events_team) && isset($events_team[0]) && is_array($events_team[0]) && isset($events_team[0]['id'])) {
+            // 既にタームオブジェクト形式なので、そのまま返す
+            return $data;
+        }
+
+        // ターム名の配列の場合
+        if (is_array($events_team)) {
+            foreach ($events_team as $term_value) {
+                $term = null;
+                
+                // 数値の場合はタームIDとして処理
+                if (is_numeric($term_value)) {
+                    $term = get_term($term_value, 'events_team');
+                } else {
+                    // 文字列の場合はターム名として処理（ターム名からタームIDを逆引き）
+                    $term = get_term_by('name', $term_value, 'events_team');
+                    if (!$term) {
+                        // スラッグでも試す
+                        $term = get_term_by('slug', $term_value, 'events_team');
+                    }
+                }
+                
+                if ($term && !is_wp_error($term)) {
+                    // タームのACFフィールドからcolorを取得
+                    $color = null;
+                    if (function_exists('get_field')) {
+                        $color = get_field('color', 'taxonomy_events_team_' . $term->term_id);
+                    }
+                    
+                    // ターム情報をオブジェクトとして追加
+                    $term_objects[] = array(
+                        'id' => $term->term_id,
+                        'name' => $term->name,
+                        'color' => $color ? $color : null
+                    );
+                }
+            }
+            
+            // events_teamを更新
+            if (!empty($term_objects)) {
+                $data->data['events_team'] = $term_objects;
+            }
+        } elseif (is_string($events_team)) {
+            // 単一のターム名の場合
+            $term = get_term_by('name', $events_team, 'events_team');
+            if (!$term) {
+                $term = get_term_by('slug', $events_team, 'events_team');
+            }
+            if ($term && !is_wp_error($term)) {
+                // タームのACFフィールドからcolorを取得
+                $color = null;
+                if (function_exists('get_field')) {
+                    $color = get_field('color', 'taxonomy_events_team_' . $term->term_id);
+                }
+                
+                // ターム情報をオブジェクトとして追加
+                $data->data['events_team'] = array(
+                    'id' => $term->term_id,
+                    'name' => $term->name,
+                    'color' => $color ? $color : null
+                );
+            }
+        } elseif (is_numeric($events_team)) {
+            // 単一のタームIDの場合
+            $term = get_term($events_team, 'events_team');
+            if ($term && !is_wp_error($term)) {
+                // タームのACFフィールドからcolorを取得
+                $color = null;
+                if (function_exists('get_field')) {
+                    $color = get_field('color', 'taxonomy_events_team_' . $term->term_id);
+                }
+                
+                // ターム情報をオブジェクトとして追加
+                $data->data['events_team'] = array(
+                    'id' => $term->term_id,
+                    'name' => $term->name,
+                    'color' => $color ? $color : null
+                );
+            }
+        }
+    }
+
+    return $data;
+}
+// events投稿タイプのREST APIレスポンスに適用（優先度30で、他の処理より後に実行）
+add_filter('rest_prepare_events', 'add_color_to_events_team_in_rest_api', 30, 3);
+
 
 /**
  * タクソノミー自体をREST APIで公開する
