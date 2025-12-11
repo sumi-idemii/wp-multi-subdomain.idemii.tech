@@ -158,10 +158,28 @@ function add_acf_fields_to_rest_api($data, $post, $request) {
                 if ($taxonomy === 'events_team') {
                     $term_objects = array();
                     
-                    // タームIDの配列の場合
+                    // タームIDの配列、ターム名の配列、またはタームオブジェクトの配列の場合
                     if (is_array($field_value) && !empty($field_value)) {
-                        foreach ($field_value as $term_id) {
-                            $term = get_term($term_id, $taxonomy);
+                        foreach ($field_value as $term_value) {
+                            $term = null;
+                            
+                            // 既にWP_Termオブジェクトの場合
+                            if (is_object($term_value) && get_class($term_value) === 'WP_Term') {
+                                $term = $term_value;
+                            }
+                            // 数値の場合はタームIDとして処理
+                            elseif (is_numeric($term_value)) {
+                                $term = get_term($term_value, $taxonomy);
+                            }
+                            // 文字列の場合はターム名として処理（ターム名からタームIDを逆引き）
+                            elseif (is_string($term_value)) {
+                                $term = get_term_by('name', $term_value, $taxonomy);
+                                if (!$term) {
+                                    // スラッグでも試す
+                                    $term = get_term_by('slug', $term_value, $taxonomy);
+                                }
+                            }
+                            
                             if ($term && !is_wp_error($term)) {
                                 // タームのACFフィールドからcolorを取得
                                 $color = get_taxonomy_term_color($term);
@@ -175,9 +193,40 @@ function add_acf_fields_to_rest_api($data, $post, $request) {
                             }
                         }
                         $acf_fields[$field_name] = $term_objects;
+                    } elseif (is_object($field_value) && get_class($field_value) === 'WP_Term') {
+                        // 単一のWP_Termオブジェクトの場合
+                        $term = $field_value;
+                        if ($term && !is_wp_error($term)) {
+                            // タームのACFフィールドからcolorを取得
+                            $color = get_taxonomy_term_color($term);
+                            
+                            // ターム情報をオブジェクトとして追加
+                            $acf_fields[$field_name] = array(
+                                'id' => $term->term_id,
+                                'name' => $term->name,
+                                'color' => $color
+                            );
+                        }
                     } elseif (is_numeric($field_value)) {
                         // 単一のタームIDの場合
                         $term = get_term($field_value, $taxonomy);
+                        if ($term && !is_wp_error($term)) {
+                            // タームのACFフィールドからcolorを取得
+                            $color = get_taxonomy_term_color($term);
+                            
+                            // ターム情報をオブジェクトとして追加
+                            $acf_fields[$field_name] = array(
+                                'id' => $term->term_id,
+                                'name' => $term->name,
+                                'color' => $color
+                            );
+                        }
+                    } elseif (is_string($field_value)) {
+                        // 単一のターム名の場合
+                        $term = get_term_by('name', $field_value, $taxonomy);
+                        if (!$term) {
+                            $term = get_term_by('slug', $field_value, $taxonomy);
+                        }
                         if ($term && !is_wp_error($term)) {
                             // タームのACFフィールドからcolorを取得
                             $color = get_taxonomy_term_color($term);
