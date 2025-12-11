@@ -154,22 +154,60 @@ function add_acf_fields_to_rest_api($data, $post, $request) {
             if ($field_object && $field_object['type'] === 'taxonomy') {
                 $taxonomy = $field_object['taxonomy'];
                 
-                // タームIDの配列の場合、ターム名の配列に変換
-                if (is_array($field_value) && !empty($field_value)) {
-                    $term_names = array();
-                    foreach ($field_value as $term_id) {
-                        $term = get_term($term_id, $taxonomy);
+                // events_teamタクソノミーの場合は、タームオブジェクト（id, name, color）を含める
+                if ($taxonomy === 'events_team') {
+                    $term_objects = array();
+                    
+                    // タームIDの配列の場合
+                    if (is_array($field_value) && !empty($field_value)) {
+                        foreach ($field_value as $term_id) {
+                            $term = get_term($term_id, $taxonomy);
+                            if ($term && !is_wp_error($term)) {
+                                // タームのACFフィールドからcolorを取得
+                                $color = get_taxonomy_term_color($term);
+                                
+                                // ターム情報をオブジェクトとして追加
+                                $term_objects[] = array(
+                                    'id' => $term->term_id,
+                                    'name' => $term->name,
+                                    'color' => $color
+                                );
+                            }
+                        }
+                        $acf_fields[$field_name] = $term_objects;
+                    } elseif (is_numeric($field_value)) {
+                        // 単一のタームIDの場合
+                        $term = get_term($field_value, $taxonomy);
                         if ($term && !is_wp_error($term)) {
-                            // ターム名を配列に追加
-                            $term_names[] = $term->name;
+                            // タームのACFフィールドからcolorを取得
+                            $color = get_taxonomy_term_color($term);
+                            
+                            // ターム情報をオブジェクトとして追加
+                            $acf_fields[$field_name] = array(
+                                'id' => $term->term_id,
+                                'name' => $term->name,
+                                'color' => $color
+                            );
                         }
                     }
-                    $acf_fields[$field_name] = $term_names;
-                } elseif (is_numeric($field_value)) {
-                    // 単一のタームIDの場合
-                    $term = get_term($field_value, $taxonomy);
-                    if ($term && !is_wp_error($term)) {
-                        $acf_fields[$field_name] = $term->name;
+                } else {
+                    // その他のタクソノミーの場合は、ターム名の配列に変換
+                    if (is_array($field_value) && !empty($field_value)) {
+                        $term_names = array();
+                        foreach ($field_value as $term_id) {
+                            $term = get_term($term_id, $taxonomy);
+                            if ($term && !is_wp_error($term)) {
+                                // ターム名を配列に追加
+                                $term_names[] = $term->name;
+                            }
+                        }
+                        $acf_fields[$field_name] = $term_names;
+                    } elseif (is_numeric($field_value)) {
+                        // 単一のタームIDの場合
+                        $term = get_term($field_value, $taxonomy);
+                        if ($term && !is_wp_error($term)) {
+                            $acf_fields[$field_name] = $term->name;
+                        }
                     }
                 }
             }
