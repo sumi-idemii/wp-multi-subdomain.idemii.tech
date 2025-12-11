@@ -85,13 +85,24 @@ function get_taxonomy_term_color($term) {
     }
     
     // 方法7: get_term_metaを直接使用（ACFが内部的に使用する方法）
-    // ACFは通常、field_{field_key}という形式でメタキーを保存
+    // ACFは通常、値とフィールドキーをペアで保存（例: 'color'と'_color'）
+    // まず、'_color'からフィールドキーを取得
+    $field_key = get_term_meta($term->term_id, '_color', true);
+    if ($field_key && strpos($field_key, 'field_') === 0) {
+        // フィールドキーを使用して値を取得
+        $color = get_term_meta($term->term_id, $field_key, true);
+        if ($color !== false && $color !== null && $color !== '') {
+            return $color;
+        }
+    }
+    
+    // 方法8: 'color'メタキーから直接取得（ACFが値を保存している場合）
     $color = get_term_meta($term->term_id, 'color', true);
     if ($color !== false && $color !== null && $color !== '') {
         return $color;
     }
     
-    // 方法8: ACFの標準的なメタキーパターンを試す
+    // 方法9: ACFの標準的なメタキーパターンを試す
     global $wpdb;
     $meta_keys = $wpdb->get_col($wpdb->prepare(
         "SELECT meta_key FROM {$wpdb->termmeta} WHERE term_id = %d AND (meta_key LIKE '%%color%%' OR meta_value LIKE '%%color%%')",
@@ -99,7 +110,16 @@ function get_taxonomy_term_color($term) {
     ));
     
     foreach ($meta_keys as $meta_key) {
-        if (strpos($meta_key, 'color') !== false) {
+        // '_color'（フィールドキー）はスキップ
+        if ($meta_key === '_color') {
+            continue;
+        }
+        // 'field_'で始まるメタキーもスキップ（フィールドキー自体）
+        if (strpos($meta_key, 'field_') === 0) {
+            continue;
+        }
+        // 'color'という名前のメタキーから値を取得
+        if (strpos($meta_key, 'color') !== false && $meta_key !== '_color') {
             $color = get_term_meta($term->term_id, $meta_key, true);
             if ($color !== false && $color !== null && $color !== '') {
                 return $color;
