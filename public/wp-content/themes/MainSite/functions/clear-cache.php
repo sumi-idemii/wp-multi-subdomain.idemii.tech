@@ -14,8 +14,27 @@ function clear_all_wordpress_cache() {
     // リライトルールをフラッシュ
     flush_rewrite_rules();
     
-    // Transientをクリア（オプション）
-    // clear_all_transients();
+    // Transientをクリア
+    clear_all_transients();
+    
+    // REST APIキャッシュをクリア
+    clear_rest_api_cache();
+    
+    return true;
+}
+
+/**
+ * REST APIキャッシュをクリア
+ */
+function clear_rest_api_cache() {
+    global $wpdb;
+    
+    // REST API関連のtransientを削除
+    $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_rest_%'");
+    $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '_site_transient_rest_%'");
+    
+    // オブジェクトキャッシュもクリア
+    wp_cache_flush();
     
     return true;
 }
@@ -70,26 +89,70 @@ function clear_rewrite_rules() {
 }
 
 /**
- * 管理画面にキャッシュクリアボタンを追加（オプション）
+ * 管理画面にキャッシュクリアボタンを追加
  */
 if (is_admin()) {
+    // 管理バーにキャッシュクリアメニューを追加
     add_action('admin_bar_menu', function($wp_admin_bar) {
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+        
         $wp_admin_bar->add_menu(array(
             'id' => 'clear-cache',
             'title' => 'キャッシュクリア',
-            'href' => admin_url('admin.php?action=clear_cache'),
+            'href' => '#',
+        ));
+        
+        $wp_admin_bar->add_menu(array(
+            'parent' => 'clear-cache',
+            'id' => 'clear-all-cache',
+            'title' => 'すべてのキャッシュをクリア',
+            'href' => wp_nonce_url(admin_url('admin-post.php?action=clear_all_cache'), 'clear_all_cache_nonce'),
+        ));
+        
+        $wp_admin_bar->add_menu(array(
+            'parent' => 'clear-cache',
+            'id' => 'clear-rest-api-cache',
+            'title' => 'REST APIキャッシュをクリア',
+            'href' => wp_nonce_url(admin_url('admin-post.php?action=clear_rest_api_cache'), 'clear_rest_api_cache_nonce'),
         ));
     }, 100);
     
-    add_action('admin_action_clear_cache', function() {
+    // すべてのキャッシュをクリア
+    add_action('admin_post_clear_all_cache', function() {
         if (!current_user_can('manage_options')) {
             wp_die('権限がありません');
         }
         
+        check_admin_referer('clear_all_cache_nonce');
+        
         clear_all_wordpress_cache();
         
-        wp_redirect(admin_url('admin.php?page=clear-cache&cleared=1'));
+        wp_redirect(add_query_arg('cache_cleared', 'all', admin_url()));
         exit;
+    });
+    
+    // REST APIキャッシュのみをクリア
+    add_action('admin_post_clear_rest_api_cache', function() {
+        if (!current_user_can('manage_options')) {
+            wp_die('権限がありません');
+        }
+        
+        check_admin_referer('clear_rest_api_cache_nonce');
+        
+        clear_rest_api_cache();
+        
+        wp_redirect(add_query_arg('cache_cleared', 'rest_api', admin_url()));
+        exit;
+    });
+    
+    // キャッシュクリア成功メッセージを表示
+    add_action('admin_notices', function() {
+        if (isset($_GET['cache_cleared'])) {
+            $type = $_GET['cache_cleared'] === 'rest_api' ? 'REST API' : 'すべての';
+            echo '<div class="notice notice-success is-dismissible"><p>' . esc_html($type . 'キャッシュをクリアしました。') . '</p></div>';
+        }
     });
 }
 
