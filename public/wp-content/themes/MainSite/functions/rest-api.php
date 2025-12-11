@@ -11,6 +11,106 @@
 add_filter('acf/rest_api/field_settings/show_in_rest', '__return_true');
 
 /**
+ * タクソノミータームのACFフィールドからcolorを取得
+ * 複数の形式を試してcolorフィールドを取得する
+ * 
+ * @param WP_Term|object $term タームオブジェクト
+ * @return string|null colorの値、取得できない場合はnull
+ */
+function get_taxonomy_term_color($term) {
+    if (!$term || is_wp_error($term)) {
+        return null;
+    }
+    
+    if (!function_exists('get_field')) {
+        return null;
+    }
+    
+    $color = null;
+    
+    // 方法1: タームオブジェクトを直接渡す（推奨）
+    $color = get_field('color', $term);
+    if ($color !== false && $color !== null && $color !== '') {
+        return $color;
+    }
+    
+    // 方法2: taxonomy_{taxonomy}_{term_id}形式
+    $color = get_field('color', 'taxonomy_events_team_' . $term->term_id);
+    if ($color !== false && $color !== null && $color !== '') {
+        return $color;
+    }
+    
+    // 方法3: {taxonomy}_{term_id}形式
+    $color = get_field('color', 'events_team_' . $term->term_id);
+    if ($color !== false && $color !== null && $color !== '') {
+        return $color;
+    }
+    
+    // 方法4: タクソノミー名とタームIDを組み合わせる
+    $color = get_field('color', $term->taxonomy . '_' . $term->term_id);
+    if ($color !== false && $color !== null && $color !== '') {
+        return $color;
+    }
+    
+    // 方法5: タームIDのみを使用（ACFの設定によっては有効）
+    $color = get_field('color', $term->term_id);
+    if ($color !== false && $color !== null && $color !== '') {
+        return $color;
+    }
+    
+    // 方法6: ACFのフィールドキーを使用（フィールドグループの設定から取得）
+    if (function_exists('acf_get_field_groups')) {
+        $field_groups = acf_get_field_groups(array('taxonomy' => $term->taxonomy));
+        if (!empty($field_groups)) {
+            foreach ($field_groups as $field_group) {
+                $fields = acf_get_fields($field_group);
+                if ($fields) {
+                    foreach ($fields as $field) {
+                        if ($field['name'] === 'color') {
+                            // フィールドキーを使用
+                            $color = get_field($field['key'], 'taxonomy_' . $term->taxonomy . '_' . $term->term_id);
+                            if ($color !== false && $color !== null && $color !== '') {
+                                return $color;
+                            }
+                            // フィールド名を使用
+                            $color = get_field($field['name'], 'taxonomy_' . $term->taxonomy . '_' . $term->term_id);
+                            if ($color !== false && $color !== null && $color !== '') {
+                                return $color;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // 方法7: get_term_metaを直接使用（ACFが内部的に使用する方法）
+    // ACFは通常、field_{field_key}という形式でメタキーを保存
+    $color = get_term_meta($term->term_id, 'color', true);
+    if ($color !== false && $color !== null && $color !== '') {
+        return $color;
+    }
+    
+    // 方法8: ACFの標準的なメタキーパターンを試す
+    global $wpdb;
+    $meta_keys = $wpdb->get_col($wpdb->prepare(
+        "SELECT meta_key FROM {$wpdb->termmeta} WHERE term_id = %d AND (meta_key LIKE '%%color%%' OR meta_value LIKE '%%color%%')",
+        $term->term_id
+    ));
+    
+    foreach ($meta_keys as $meta_key) {
+        if (strpos($meta_key, 'color') !== false) {
+            $color = get_term_meta($term->term_id, $meta_key, true);
+            if ($color !== false && $color !== null && $color !== '') {
+                return $color;
+            }
+        }
+    }
+    
+    return null;
+}
+
+/**
  * カスタム投稿タイプのREST APIレスポンスにACFフィールドを追加
  * タクソノミーフィールドの値をターム名に変換
  * events投稿タイプの場合は複数の日程セットを配列として追加
@@ -115,26 +215,14 @@ function convert_taxonomy_fields_to_names($data, $post, $request) {
                             }
                             
                             if ($term && !is_wp_error($term)) {
-                                // タームのACFフィールドからcolorを取得（複数の形式を試す）
-                                $color = null;
-                                if (function_exists('get_field')) {
-                                    // 方法1: タームオブジェクトを直接渡す
-                                    $color = get_field('color', $term);
-                                    // 方法2: taxonomy_{taxonomy}_{term_id}形式
-                                    if (!$color) {
-                                        $color = get_field('color', 'taxonomy_events_team_' . $term->term_id);
-                                    }
-                                    // 方法3: {taxonomy}_{term_id}形式
-                                    if (!$color) {
-                                        $color = get_field('color', 'events_team_' . $term->term_id);
-                                    }
-                                }
+                                // タームのACFフィールドからcolorを取得
+                                $color = get_taxonomy_term_color($term);
                                 
                                 // ターム情報をオブジェクトとして追加
                                 $term_objects[] = array(
                                     'id' => $term->term_id,
                                     'name' => $term->name,
-                                    'color' => $color ? $color : null
+                                    'color' => $color
                                 );
                             }
                         }
@@ -143,26 +231,14 @@ function convert_taxonomy_fields_to_names($data, $post, $request) {
                         // 単一のタームIDの場合
                         $term = get_term($field_value, $actual_taxonomy);
                         if ($term && !is_wp_error($term)) {
-                            // タームのACFフィールドからcolorを取得（複数の形式を試す）
-                            $color = null;
-                            if (function_exists('get_field')) {
-                                // 方法1: タームオブジェクトを直接渡す
-                                $color = get_field('color', $term);
-                                // 方法2: taxonomy_{taxonomy}_{term_id}形式
-                                if (!$color) {
-                                    $color = get_field('color', 'taxonomy_events_team_' . $term->term_id);
-                                }
-                                // 方法3: {taxonomy}_{term_id}形式
-                                if (!$color) {
-                                    $color = get_field('color', 'events_team_' . $term->term_id);
-                                }
-                            }
+                            // タームのACFフィールドからcolorを取得
+                            $color = get_taxonomy_term_color($term);
                             
                             // ターム情報をオブジェクトとして追加
                             $data->data[$field_name] = array(
                                 'id' => $term->term_id,
                                 'name' => $term->name,
-                                'color' => $color ? $color : null
+                                'color' => $color
                             );
                         }
                     } elseif (is_string($field_value)) {
@@ -172,26 +248,14 @@ function convert_taxonomy_fields_to_names($data, $post, $request) {
                             $term = get_term_by('slug', $field_value, $actual_taxonomy);
                         }
                         if ($term && !is_wp_error($term)) {
-                            // タームのACFフィールドからcolorを取得（複数の形式を試す）
-                            $color = null;
-                            if (function_exists('get_field')) {
-                                // 方法1: タームオブジェクトを直接渡す
-                                $color = get_field('color', $term);
-                                // 方法2: taxonomy_{taxonomy}_{term_id}形式
-                                if (!$color) {
-                                    $color = get_field('color', 'taxonomy_events_team_' . $term->term_id);
-                                }
-                                // 方法3: {taxonomy}_{term_id}形式
-                                if (!$color) {
-                                    $color = get_field('color', 'events_team_' . $term->term_id);
-                                }
-                            }
+                            // タームのACFフィールドからcolorを取得
+                            $color = get_taxonomy_term_color($term);
                             
                             // ターム情報をオブジェクトとして追加
                             $data->data[$field_name] = array(
                                 'id' => $term->term_id,
                                 'name' => $term->name,
-                                'color' => $color ? $color : null
+                                'color' => $color
                             );
                         }
                     }
@@ -243,26 +307,14 @@ function convert_taxonomy_fields_to_names($data, $post, $request) {
                                 }
                                 
                                 if ($term && !is_wp_error($term)) {
-                                    // タームのACFフィールドからcolorを取得（複数の形式を試す）
-                                    $color = null;
-                                    if (function_exists('get_field')) {
-                                        // 方法1: タームオブジェクトを直接渡す
-                                        $color = get_field('color', $term);
-                                        // 方法2: taxonomy_{taxonomy}_{term_id}形式
-                                        if (!$color) {
-                                            $color = get_field('color', 'taxonomy_events_team_' . $term->term_id);
-                                        }
-                                        // 方法3: {taxonomy}_{term_id}形式
-                                        if (!$color) {
-                                            $color = get_field('color', 'events_team_' . $term->term_id);
-                                        }
-                                    }
+                                    // タームのACFフィールドからcolorを取得
+                                    $color = get_taxonomy_term_color($term);
                                     
                                     // ターム情報をオブジェクトとして追加
                                     $term_objects[] = array(
                                         'id' => $term->term_id,
                                         'name' => $term->name,
-                                        'color' => $color ? $color : null
+                                        'color' => $color
                                     );
                                 }
                             }
@@ -270,58 +322,34 @@ function convert_taxonomy_fields_to_names($data, $post, $request) {
                         } elseif (is_numeric($field_value)) {
                             // 単一のタームIDの場合
                             $term = get_term($field_value, $taxonomy);
-                            if ($term && !is_wp_error($term)) {
-                                // タームのACFフィールドからcolorを取得（複数の形式を試す）
-                                $color = null;
-                                if (function_exists('get_field')) {
-                                    // 方法1: タームオブジェクトを直接渡す
-                                    $color = get_field('color', $term);
-                                    // 方法2: taxonomy_{taxonomy}_{term_id}形式
-                                    if (!$color) {
-                                        $color = get_field('color', 'taxonomy_events_team_' . $term->term_id);
-                                    }
-                                    // 方法3: {taxonomy}_{term_id}形式
-                                    if (!$color) {
-                                        $color = get_field('color', 'events_team_' . $term->term_id);
-                                    }
-                                }
-                                
-                                // ターム情報をオブジェクトとして追加
-                                $data->data[$field_name] = array(
-                                    'id' => $term->term_id,
-                                    'name' => $term->name,
-                                    'color' => $color ? $color : null
-                                );
-                            }
+                        if ($term && !is_wp_error($term)) {
+                            // タームのACFフィールドからcolorを取得
+                            $color = get_taxonomy_term_color($term);
+                            
+                            // ターム情報をオブジェクトとして追加
+                            $data->data[$field_name] = array(
+                                'id' => $term->term_id,
+                                'name' => $term->name,
+                                'color' => $color
+                            );
+                        }
                         } elseif (is_string($field_value)) {
                             // 単一のターム名の場合（ターム名からタームIDを逆引き）
                             $term = get_term_by('name', $field_value, $taxonomy);
                             if (!$term) {
                                 $term = get_term_by('slug', $field_value, $taxonomy);
                             }
-                            if ($term && !is_wp_error($term)) {
-                                // タームのACFフィールドからcolorを取得（複数の形式を試す）
-                                $color = null;
-                                if (function_exists('get_field')) {
-                                    // 方法1: タームオブジェクトを直接渡す
-                                    $color = get_field('color', $term);
-                                    // 方法2: taxonomy_{taxonomy}_{term_id}形式
-                                    if (!$color) {
-                                        $color = get_field('color', 'taxonomy_events_team_' . $term->term_id);
-                                    }
-                                    // 方法3: {taxonomy}_{term_id}形式
-                                    if (!$color) {
-                                        $color = get_field('color', 'events_team_' . $term->term_id);
-                                    }
-                                }
-                                
-                                // ターム情報をオブジェクトとして追加
-                                $data->data[$field_name] = array(
-                                    'id' => $term->term_id,
-                                    'name' => $term->name,
-                                    'color' => $color ? $color : null
-                                );
-                            }
+                        if ($term && !is_wp_error($term)) {
+                            // タームのACFフィールドからcolorを取得
+                            $color = get_taxonomy_term_color($term);
+                            
+                            // ターム情報をオブジェクトとして追加
+                            $data->data[$field_name] = array(
+                                'id' => $term->term_id,
+                                'name' => $term->name,
+                                'color' => $color
+                            );
+                        }
                         }
                     } else {
                         // その他のタクソノミーの場合は、ターム名の配列に変換
@@ -420,26 +448,14 @@ function add_color_to_events_team_in_rest_api($data, $post, $request) {
                 }
                 
                 if ($term && !is_wp_error($term)) {
-                    // タームのACFフィールドからcolorを取得（複数の形式を試す）
-                    $color = null;
-                    if (function_exists('get_field')) {
-                        // 方法1: タームオブジェクトを直接渡す
-                        $color = get_field('color', $term);
-                        // 方法2: taxonomy_{taxonomy}_{term_id}形式
-                        if (!$color) {
-                            $color = get_field('color', 'taxonomy_events_team_' . $term->term_id);
-                        }
-                        // 方法3: {taxonomy}_{term_id}形式
-                        if (!$color) {
-                            $color = get_field('color', 'events_team_' . $term->term_id);
-                        }
-                    }
+                    // タームのACFフィールドからcolorを取得
+                    $color = get_taxonomy_term_color($term);
                     
                     // ターム情報をオブジェクトとして追加
                     $term_objects[] = array(
                         'id' => $term->term_id,
                         'name' => $term->name,
-                        'color' => $color ? $color : null
+                        'color' => $color
                     );
                 }
             }
@@ -455,52 +471,28 @@ function add_color_to_events_team_in_rest_api($data, $post, $request) {
                 $term = get_term_by('slug', $events_team, 'events_team');
             }
             if ($term && !is_wp_error($term)) {
-                // タームのACFフィールドからcolorを取得（複数の形式を試す）
-                $color = null;
-                if (function_exists('get_field')) {
-                    // 方法1: タームオブジェクトを直接渡す
-                    $color = get_field('color', $term);
-                    // 方法2: taxonomy_{taxonomy}_{term_id}形式
-                    if (!$color) {
-                        $color = get_field('color', 'taxonomy_events_team_' . $term->term_id);
-                    }
-                    // 方法3: {taxonomy}_{term_id}形式
-                    if (!$color) {
-                        $color = get_field('color', 'events_team_' . $term->term_id);
-                    }
-                }
+                // タームのACFフィールドからcolorを取得
+                $color = get_taxonomy_term_color($term);
                 
                 // ターム情報をオブジェクトとして追加
                 $data->data[$events_team_key] = array(
                     'id' => $term->term_id,
                     'name' => $term->name,
-                    'color' => $color ? $color : null
+                    'color' => $color
                 );
             }
         } elseif (is_numeric($events_team)) {
             // 単一のタームIDの場合
             $term = get_term($events_team, 'events_team');
             if ($term && !is_wp_error($term)) {
-                // タームのACFフィールドからcolorを取得（複数の形式を試す）
-                $color = null;
-                if (function_exists('get_field')) {
-                    // 方法1: タームオブジェクトを直接渡す
-                    $color = get_field('color', $term);
-                    // 方法2: taxonomy_{taxonomy}_{term_id}形式
-                    if (!$color) {
-                        $color = get_field('color', 'taxonomy_events_team_' . $term->term_id);
-                    }
-                    // 方法3: {taxonomy}_{term_id}形式
-                    if (!$color) {
-                        $color = get_field('color', 'events_team_' . $term->term_id);
-                    }
-                }
+                // タームのACFフィールドからcolorを取得
+                $color = get_taxonomy_term_color($term);
                 
                 // ターム情報をオブジェクトとして追加
                 $data->data[$events_team_key] = array(
                     'id' => $term->term_id,
                     'name' => $term->name,
-                    'color' => $color ? $color : null
+                    'color' => $color
                 );
             }
         }
