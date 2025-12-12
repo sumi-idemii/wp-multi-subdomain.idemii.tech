@@ -268,8 +268,15 @@ function add_acf_fields_to_rest_api($data, $post, $request) {
             $acf_fields['event_schedules'] = $schedules;
         }
         
+        // フィールド名をハイフンからアンダースコアに変換（events-venue → events_venue）
+        $normalized_acf_fields = array();
+        foreach ($acf_fields as $field_name => $field_value) {
+            $normalized_field_name = str_replace('-', '_', $field_name);
+            $normalized_acf_fields[$normalized_field_name] = $field_value;
+        }
+        
         // ACFフィールドをレスポンスに追加
-        $data->data['acf'] = $acf_fields;
+        $data->data['acf'] = $normalized_acf_fields;
     }
 
     return $data;
@@ -288,15 +295,23 @@ function convert_taxonomy_fields_to_names($data, $post, $request) {
 
     // データ配列内のすべてのキーをチェック
     if (isset($data->data) && is_array($data->data)) {
+        $normalized_data = array();
         foreach ($data->data as $field_name => $field_value) {
+            // フィールド名をハイフンからアンダースコアに変換（events-venue → events_venue）
+            $normalized_field_name = str_replace('-', '_', $field_name);
+            
             // フィールド名がタクソノミー名と一致する可能性がある場合
             // ACFのタクソノミーフィールドは通常、タクソノミー名と同じ名前になる
+            // ハイフン形式とアンダースコア形式の両方をチェック
             $taxonomy = $field_name;
+            $normalized_taxonomy = $normalized_field_name;
             
-            // タクソノミーが存在する場合
-            if (taxonomy_exists($taxonomy)) {
+            // タクソノミーが存在する場合（元の名前または正規化後の名前でチェック）
+            if (taxonomy_exists($taxonomy) || taxonomy_exists($normalized_taxonomy)) {
+                // 実際のタクソノミー名を使用
+                $actual_taxonomy = taxonomy_exists($taxonomy) ? $taxonomy : $normalized_taxonomy;
                 // events_teamタクソノミーの場合は、タームオブジェクト（id, name, color）を含める
-                if ($taxonomy === 'events_team') {
+                if ($actual_taxonomy === 'events_team') {
                     $term_objects = array();
                     
                     // タームIDの配列の場合
@@ -306,13 +321,13 @@ function convert_taxonomy_fields_to_names($data, $post, $request) {
                             
                             // 数値の場合はタームIDとして処理
                             if (is_numeric($term_value)) {
-                                $term = get_term($term_value, $taxonomy);
+                                $term = get_term($term_value, $actual_taxonomy);
                             } else {
                                 // 文字列の場合はターム名として処理（ターム名からタームIDを逆引き）
-                                $term = get_term_by('name', $term_value, $taxonomy);
+                                $term = get_term_by('name', $term_value, $actual_taxonomy);
                                 if (!$term) {
                                     // スラッグでも試す
-                                    $term = get_term_by('slug', $term_value, $taxonomy);
+                                    $term = get_term_by('slug', $term_value, $actual_taxonomy);
                                 }
                             }
                             
@@ -328,37 +343,44 @@ function convert_taxonomy_fields_to_names($data, $post, $request) {
                                 );
                             }
                         }
-                        $data->data[$field_name] = $term_objects;
-                        } elseif (is_numeric($field_value)) {
-                            // 単一のタームIDの場合
-                            $term = get_term($field_value, $taxonomy);
+                        // 正規化されたフィールド名で保存
+                        $normalized_data[$normalized_field_name] = $term_objects;
+                        // 元のフィールド名を削除
+                        unset($data->data[$field_name]);
+                    } elseif (is_numeric($field_value)) {
+                        // 単一のタームIDの場合
+                        $term = get_term($field_value, $actual_taxonomy);
                         if ($term && !is_wp_error($term)) {
                             // タームのACFフィールドからcolorを取得
                             $color = get_taxonomy_term_color($term);
                             
-                            // ターム情報をオブジェクトとして追加
-                            $data->data[$field_name] = array(
+                            // ターム情報をオブジェクトとして追加（正規化されたフィールド名で保存）
+                            $normalized_data[$normalized_field_name] = array(
                                 'id' => $term->term_id,
                                 'name' => $term->name,
                                 'color' => $color
                             );
+                            // 元のフィールド名を削除
+                            unset($data->data[$field_name]);
                         }
                     } elseif (is_string($field_value)) {
                         // 単一のターム名の場合（ターム名からタームIDを逆引き）
-                        $term = get_term_by('name', $field_value, $taxonomy);
+                        $term = get_term_by('name', $field_value, $actual_taxonomy);
                         if (!$term) {
-                            $term = get_term_by('slug', $field_value, $taxonomy);
+                            $term = get_term_by('slug', $field_value, $actual_taxonomy);
                         }
                         if ($term && !is_wp_error($term)) {
                             // タームのACFフィールドからcolorを取得
                             $color = get_taxonomy_term_color($term);
                             
-                            // ターム情報をオブジェクトとして追加
-                            $data->data[$field_name] = array(
+                            // ターム情報をオブジェクトとして追加（正規化されたフィールド名で保存）
+                            $normalized_data[$normalized_field_name] = array(
                                 'id' => $term->term_id,
                                 'name' => $term->name,
                                 'color' => $color
                             );
+                            // 元のフィールド名を削除
+                            unset($data->data[$field_name]);
                         }
                     }
                 } else {
@@ -366,17 +388,23 @@ function convert_taxonomy_fields_to_names($data, $post, $request) {
                     if (is_array($field_value) && !empty($field_value) && is_numeric($field_value[0])) {
                         $term_names = array();
                         foreach ($field_value as $term_id) {
-                            $term = get_term($term_id, $taxonomy);
+                            $term = get_term($term_id, $actual_taxonomy);
                             if ($term && !is_wp_error($term)) {
                                 $term_names[] = $term->name;
                             }
                         }
-                        $data->data[$field_name] = $term_names;
+                        // 正規化されたフィールド名で保存
+                        $normalized_data[$normalized_field_name] = $term_names;
+                        // 元のフィールド名を削除
+                        unset($data->data[$field_name]);
                     } elseif (is_numeric($field_value)) {
                         // 単一のタームIDの場合
-                        $term = get_term($field_value, $taxonomy);
+                        $term = get_term($field_value, $actual_taxonomy);
                         if ($term && !is_wp_error($term)) {
-                            $data->data[$field_name] = $term->name;
+                            // 正規化されたフィールド名で保存
+                            $normalized_data[$normalized_field_name] = $term->name;
+                            // 元のフィールド名を削除
+                            unset($data->data[$field_name]);
                         }
                     }
                 }
@@ -420,38 +448,45 @@ function convert_taxonomy_fields_to_names($data, $post, $request) {
                                     );
                                 }
                             }
-                            $data->data[$field_name] = $term_objects;
+                            // 正規化されたフィールド名で保存
+                            $normalized_data[$normalized_field_name] = $term_objects;
+                            // 元のフィールド名を削除
+                            unset($data->data[$field_name]);
                         } elseif (is_numeric($field_value)) {
                             // 単一のタームIDの場合
                             $term = get_term($field_value, $taxonomy);
-                        if ($term && !is_wp_error($term)) {
-                            // タームのACFフィールドからcolorを取得
-                            $color = get_taxonomy_term_color($term);
-                            
-                            // ターム情報をオブジェクトとして追加
-                            $data->data[$field_name] = array(
-                                'id' => $term->term_id,
-                                'name' => $term->name,
-                                'color' => $color
-                            );
-                        }
+                            if ($term && !is_wp_error($term)) {
+                                // タームのACFフィールドからcolorを取得
+                                $color = get_taxonomy_term_color($term);
+                                
+                                // ターム情報をオブジェクトとして追加（正規化されたフィールド名で保存）
+                                $normalized_data[$normalized_field_name] = array(
+                                    'id' => $term->term_id,
+                                    'name' => $term->name,
+                                    'color' => $color
+                                );
+                                // 元のフィールド名を削除
+                                unset($data->data[$field_name]);
+                            }
                         } elseif (is_string($field_value)) {
                             // 単一のターム名の場合（ターム名からタームIDを逆引き）
                             $term = get_term_by('name', $field_value, $taxonomy);
                             if (!$term) {
                                 $term = get_term_by('slug', $field_value, $taxonomy);
                             }
-                        if ($term && !is_wp_error($term)) {
-                            // タームのACFフィールドからcolorを取得
-                            $color = get_taxonomy_term_color($term);
-                            
-                            // ターム情報をオブジェクトとして追加
-                            $data->data[$field_name] = array(
-                                'id' => $term->term_id,
-                                'name' => $term->name,
-                                'color' => $color
-                            );
-                        }
+                            if ($term && !is_wp_error($term)) {
+                                // タームのACFフィールドからcolorを取得
+                                $color = get_taxonomy_term_color($term);
+                                
+                                // ターム情報をオブジェクトとして追加（正規化されたフィールド名で保存）
+                                $normalized_data[$normalized_field_name] = array(
+                                    'id' => $term->term_id,
+                                    'name' => $term->name,
+                                    'color' => $color
+                                );
+                                // 元のフィールド名を削除
+                                unset($data->data[$field_name]);
+                            }
                         }
                     } else {
                         // その他のタクソノミーの場合は、ターム名の配列に変換
@@ -463,17 +498,49 @@ function convert_taxonomy_fields_to_names($data, $post, $request) {
                                     $term_names[] = $term->name;
                                 }
                             }
-                            $data->data[$field_name] = $term_names;
+                            // 正規化されたフィールド名で保存
+                            $normalized_data[$normalized_field_name] = $term_names;
+                            // 元のフィールド名を削除
+                            unset($data->data[$field_name]);
                         } elseif (is_numeric($field_value)) {
                             // 単一のタームIDの場合
                             $term = get_term($field_value, $taxonomy);
                             if ($term && !is_wp_error($term)) {
-                                $data->data[$field_name] = $term->name;
+                                // 正規化されたフィールド名で保存
+                                $normalized_data[$normalized_field_name] = $term->name;
+                                // 元のフィールド名を削除
+                                unset($data->data[$field_name]);
                             }
                         }
                     }
+                } else {
+                    // タクソノミーでない場合も、フィールド名を正規化
+                    if ($field_name !== $normalized_field_name) {
+                        $normalized_data[$normalized_field_name] = $field_value;
+                        unset($data->data[$field_name]);
+                    }
                 }
             }
+        }
+        
+        // 正規化されたデータをマージ
+        if (!empty($normalized_data)) {
+            $data->data = array_merge($data->data, $normalized_data);
+        }
+        
+        // 残りのフィールド名も正規化（ハイフンからアンダースコアに変換）
+        $final_normalized_data = array();
+        foreach ($data->data as $field_name => $field_value) {
+            $normalized_field_name = str_replace('-', '_', $field_name);
+            if ($field_name !== $normalized_field_name) {
+                $final_normalized_data[$normalized_field_name] = $field_value;
+                unset($data->data[$field_name]);
+            }
+        }
+        
+        // 最終的な正規化されたデータをマージ
+        if (!empty($final_normalized_data)) {
+            $data->data = array_merge($data->data, $final_normalized_data);
         }
     }
 
