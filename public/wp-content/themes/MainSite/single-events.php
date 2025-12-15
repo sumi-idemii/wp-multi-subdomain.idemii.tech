@@ -130,20 +130,25 @@ while (have_posts()) :
                 }
             }
             
+            // イベント開催テキストを取得（1つのフィールドのみ）
+            $date_text = get_field('events_date_text', $post_id);
+            if (empty($date_text)) {
+                $date_text = get_field('events-date-text', $post_id);
+            }
+            // イベント開催テキストを表示（存在する場合のみ）
+            if (!empty($date_text)) {
+                echo '<p><strong>イベント開催テキスト入力:</strong> ' . esc_html($date_text) . '</p>';
+            }
+            
             // 開催日時を表示（1〜12まで）
             if (function_exists('parse_datetime_from_field')) {
                 for ($i = 1; $i <= 12; $i++) {
                     $suffix = '_' . $i;
                     $start_date = get_field('events_start_date' . $suffix, $post_id);
                     $end_date = get_field('events_end_date' . $suffix, $post_id);
-                    $date_text = get_field('events_date_text' . $suffix, $post_id);
                     
                     // 開始日時が存在する場合のみ表示
                     if (!empty($start_date)) {
-                        // イベント開催テキストを表示（存在する場合のみ）
-                        if (!empty($date_text)) {
-                            echo '<p><strong>イベント開催テキスト' . $i . ':</strong> ' . esc_html($date_text) . '</p>';
-                        }
                         
                         $start_datetime = parse_datetime_from_field($start_date);
                         $end_datetime = !empty($end_date) ? parse_datetime_from_field($end_date) : false;
