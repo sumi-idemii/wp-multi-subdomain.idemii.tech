@@ -27,8 +27,8 @@ function get_breadcrumb() {
         if (is_single()) {
             $post_type = get_post_type();
             if ($post_type) {
-                // カスタム投稿タイプの場合、Newsセクションを追加
-                if ($post_type !== 'post') {
+                // カスタム投稿タイプの場合、Newsセクションを追加（eventsは除外）
+                if ($post_type !== 'post' && $post_type !== 'events') {
                     $breadcrumb[] = get_news_breadcrumb();
                 }
 
