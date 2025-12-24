@@ -1,13 +1,13 @@
 <?php
 /**
- * Template part for displaying notice section
+ * Template part for displaying announcements section
  *
  * @package wp-multi-subdomain.idemii.tech
  */
 
-// お知らせ「notice」の最新3件を取得
+// お知らせ「announcements」の最新3件を取得
 $notice_query = new WP_Query(array(
-    'post_type'      => 'notice',
+    'post_type'      => 'announcements',
     'posts_per_page' => 3,
     'orderby'        => 'date',
     'order'          => 'DESC',
@@ -26,8 +26,8 @@ if ($notice_query->have_posts()) :
                 // 日付を取得
                 $post_date = get_the_date('Y年m月d日', $post_id);
                 
-                // notice_categoryタクソノミーを取得
-                $notice_categories = get_the_terms($post_id, 'notice_category');
+                // announcements_categoryタクソノミーを取得
+                $notice_categories = get_the_terms($post_id, 'announcements_category');
                 $category_names = array();
                 if ($notice_categories && !is_wp_error($notice_categories)) {
                     foreach ($notice_categories as $category) {
@@ -61,4 +61,5 @@ if ($notice_query->have_posts()) :
         </ul>
     </section>
 <?php endif; ?>
+
 
