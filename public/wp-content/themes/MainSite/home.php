@@ -14,21 +14,38 @@ get_header();
     <?php
     // トップメインビジュアル
     get_template_part('template-parts/home', 'top-mv');
-    
+    ?>
+    <?php
     // お知らせ
-    get_template_part('template-parts/home', 'notice');
-    
+    get_template_part('template-parts/home', 'announcements');
+    ?>
+    <?php
     // ニュース
     get_template_part('template-parts/home', 'news');
-    
+    ?>
+    <?php
     // トップピックアップ
     get_template_part('template-parts/home', 'top-pickup');
-    
+    ?>
+    <?php
     // イベント
     get_template_part('template-parts/home', 'events');
-    
-    // トップページカテゴリ紹介エリア
-    get_template_part('template-parts/home', 'top-category-area');
+    ?>
+    <?php
+    // トップページカテゴリ紹介エリア（setting_no: 1）
+    get_template_part('template-parts/home', 'top-category-area', array('setting_no' => 1));
+    ?>
+    <?php
+    // トップページカテゴリ紹介エリア（setting_no: 2）
+    get_template_part('template-parts/home', 'top-category-area', array('setting_no' => 2));
+    ?>
+    <?php
+    // トップページカテゴリ紹介エリア（setting_no: 3）
+    get_template_part('template-parts/home', 'top-category-area', array('setting_no' => 3));
+    ?>
+    <?php
+    // トップページカテゴリ紹介エリア（setting_no: 4）
+    get_template_part('template-parts/home', 'top-category-area', array('setting_no' => 4));
     ?>
 </main>
 

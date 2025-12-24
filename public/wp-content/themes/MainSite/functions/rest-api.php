@@ -714,6 +714,7 @@ add_action('init', 'register_custom_post_type_rest_api_support', 30);
 /**
  * REST APIの認証を緩和（公開エンドポイントを認証不要にする）
  * カスタム投稿タイプの一覧取得を認証不要にする
+ * Polylangの言語パラメータにも対応
  */
 function allow_public_rest_api_access($result) {
     // 既に認証されている場合はそのまま返す
@@ -725,6 +726,7 @@ function allow_public_rest_api_access($result) {
     $request_uri = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
     
     // 公開エンドポイント（一覧取得）の場合は認証をスキップ
+    // Polylangの言語パラメータ（?lang=ja）や言語プレフィックス（/ja/）にも対応
     $public_routes = array(
         '/wp-json/wp/v2/events',
         '/wp-json/wp/v2/events/',
@@ -732,8 +734,20 @@ function allow_public_rest_api_access($result) {
         '/wp-json/wp/v2/news/',
     );
     
+    // Polylangが有効な場合、言語プレフィックス付きのパスも追加
+    if (function_exists('pll_languages_list')) {
+        $languages = pll_languages_list();
+        foreach ($languages as $lang) {
+            $public_routes[] = '/' . $lang . '/wp-json/wp/v2/events';
+            $public_routes[] = '/' . $lang . '/wp-json/wp/v2/events/';
+            $public_routes[] = '/' . $lang . '/wp-json/wp/v2/news';
+            $public_routes[] = '/' . $lang . '/wp-json/wp/v2/news/';
+        }
+    }
+    
     foreach ($public_routes as $public_route) {
         // 一覧取得のリクエスト（GETメソッド、かつ個別IDが含まれていない）
+        // 言語パラメータ（?lang=ja）が含まれている場合も許可
         if (strpos($request_uri, $public_route) !== false && 
             $_SERVER['REQUEST_METHOD'] === 'GET' && 
             !preg_match('/\/\d+(\/|$)/', $request_uri)) {
@@ -757,7 +771,8 @@ function add_cors_headers_to_rest_api() {
     $request_uri = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
     
     // REST APIのパスでない場合は何もしない
-    if (strpos($request_uri, '/wp-json/') === false) {
+    // Polylangの言語プレフィックス（/ja/wp-json/）にも対応
+    if (strpos($request_uri, '/wp-json/') === false && !preg_match('/\/[a-z]{2}\/wp-json\//', $request_uri)) {
         return;
     }
 
@@ -820,7 +835,8 @@ function send_cors_headers_early() {
     $request_uri = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
     
     // REST APIのパスでない場合は何もしない
-    if (strpos($request_uri, '/wp-json/') === false) {
+    // Polylangの言語プレフィックス（/ja/wp-json/）にも対応
+    if (strpos($request_uri, '/wp-json/') === false && !preg_match('/\/[a-z]{2}\/wp-json\//', $request_uri)) {
         return;
     }
 
@@ -862,4 +878,47 @@ function send_cors_headers_early() {
     }
 }
 add_action('send_headers', 'send_cors_headers_early', 1);
+
+/**
+ * PolylangのREST API対応
+ * 言語プレフィックス付きのREST APIエンドポイントを有効化
+ */
+function enable_polylang_rest_api() {
+    // Polylangが有効な場合のみ実行
+    if (!function_exists('pll_languages_list')) {
+        return;
+    }
+    
+    // PolylangのREST API設定を有効化
+    if (function_exists('pll_rest_api')) {
+        // PolylangのREST API機能を有効化
+        add_filter('rest_url_prefix', function($prefix) {
+            // 言語プレフィックスを含むREST APIのURLプレフィックスを返す
+            return $prefix;
+        });
+    }
+}
+add_action('rest_api_init', 'enable_polylang_rest_api', 10);
+
+/**
+ * REST APIのレスポンスに言語情報を追加
+ * Polylangが有効な場合、レスポンスに言語コードを追加
+ */
+function add_language_to_rest_api_response($response, $post, $request) {
+    // Polylangが有効な場合のみ実行
+    if (!function_exists('pll_get_post_language')) {
+        return $response;
+    }
+    
+    // 投稿の言語を取得
+    $lang = pll_get_post_language($post->ID);
+    if ($lang) {
+        $response->data['language'] = $lang;
+    }
+    
+    return $response;
+}
+// カスタム投稿タイプのREST APIレスポンスに言語情報を追加
+add_filter('rest_prepare_events', 'add_language_to_rest_api_response', 10, 3);
+add_filter('rest_prepare_news', 'add_language_to_rest_api_response', 10, 3);
 

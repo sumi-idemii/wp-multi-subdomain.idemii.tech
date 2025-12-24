@@ -57,7 +57,7 @@ while (have_posts()) :
                 }
                 
                 if (!empty($venue_names)) {
-                    echo '<p><strong>会場:</strong> ' . esc_html(implode(', ', $venue_names)) . '</p>';
+                    echo '<p><strong>' . esc_html(get_event_translation('venue')) . ':</strong> ' . esc_html(implode(', ', $venue_names)) . '</p>';
                 }
             }
             
@@ -84,7 +84,7 @@ while (have_posts()) :
                 }
                 
                 if (!empty($visitor_names)) {
-                    echo '<p><strong>対象参加者:</strong> ' . esc_html(implode(', ', $visitor_names)) . '</p>';
+                    echo '<p><strong>' . esc_html(get_event_translation('target_visitors')) . ':</strong> ' . esc_html(implode(', ', $visitor_names)) . '</p>';
                 }
             }
             
@@ -93,14 +93,14 @@ while (have_posts()) :
             if ($language_field) {
                 $languages = is_array($language_field) ? $language_field : array($language_field);
                 if (!empty($languages)) {
-                    echo '<p><strong>使用言語:</strong> ' . esc_html(implode(', ', $languages)) . '</p>';
+                    echo '<p><strong>' . esc_html(get_event_translation('language')) . ':</strong> ' . esc_html(implode(', ', $languages)) . '</p>';
                 }
             }
             
             // 費用 (events_participation_fee) - テキスト
             $fee_field = get_field('events_participation_fee', $post_id);
             if ($fee_field) {
-                echo '<p><strong>費用:</strong> ' . esc_html($fee_field) . '</p>';
+                echo '<p><strong>' . esc_html(get_event_translation('fee')) . ':</strong> ' . esc_html($fee_field) . '</p>';
             }
             
             // 運営チーム (events_team) - タクソノミー
@@ -126,7 +126,7 @@ while (have_posts()) :
                 }
                 
                 if (!empty($team_names)) {
-                    echo '<p><strong>運営チーム:</strong> ' . esc_html(implode(', ', $team_names)) . '</p>';
+                    echo '<p><strong>' . esc_html(get_event_translation('team')) . ':</strong> ' . esc_html(implode(', ', $team_names)) . '</p>';
                 }
             }
             
@@ -137,7 +137,7 @@ while (have_posts()) :
             }
             // イベント開催テキストを表示（存在する場合のみ）
             if (!empty($date_text)) {
-                echo '<p><strong>イベント開催テキスト入力:</strong> ' . esc_html($date_text) . '</p>';
+                echo '<p><strong>' . esc_html(get_event_translation('date_text')) . ':</strong> ' . esc_html($date_text) . '</p>';
             }
             
             // 開催日時を表示（1〜12まで）
@@ -154,38 +154,14 @@ while (have_posts()) :
                         $end_datetime = !empty($end_date) ? parse_datetime_from_field($end_date) : false;
                         
                         if ($start_datetime) {
-                            // 開始日時の表示形式
-                            $start_year = (int)$start_datetime->format('Y');
-                            $start_month = (int)$start_datetime->format('m');
-                            $start_day = (int)$start_datetime->format('d');
-                            $start_time = $start_datetime->format('H:i');
-                            
-                            $start_display = $start_year . '年' . $start_month . '月' . $start_day . '日 ' . $start_time;
-                            
                             if ($end_datetime) {
-                                // 終了日時の表示形式（条件に応じて変更）
-                                $end_year = (int)$end_datetime->format('Y');
-                                $end_month = (int)$end_datetime->format('m');
-                                $end_day = (int)$end_datetime->format('d');
-                                $end_time = $end_datetime->format('H:i');
-                                
-                                // 条件1: 同じ日の場合（年月日がすべて同じ）
-                                if ($start_year === $end_year && $start_month === $end_month && $start_day === $end_day) {
-                                    $end_display = $end_time;
-                                }
-                                // 条件2: 同じ月で日が異なる場合
-                                elseif ($start_year === $end_year && $start_month === $end_month) {
-                                    $end_display = $end_day . '日 ' . $end_time;
-                                }
-                                // 条件3: 月が異なる場合
-                                else {
-                                    $end_display = $end_month . '月' . $end_day . '日 ' . $end_time;
-                                }
-                                
-                                echo '<p><strong>開催日時' . $i . ':</strong> ' . esc_html($start_display) . ' 〜 ' . esc_html($end_display) . '</p>';
+                                // 日付範囲の表示
+                                $date_range = format_event_date_range_by_language($start_datetime, $end_datetime);
+                                echo '<p><strong>' . esc_html(get_event_translation('event_date')) . $i . ':</strong> ' . esc_html($date_range['start']) . ' 〜 ' . esc_html($date_range['end']) . '</p>';
                             } else {
                                 // 終了日時がない場合
-                                echo '<p><strong>開催日時' . $i . ':</strong> ' . esc_html($start_display) . '</p>';
+                                $start_display = format_event_date_by_language($start_datetime, 'start');
+                                echo '<p><strong>' . esc_html(get_event_translation('event_date')) . $i . ':</strong> ' . esc_html($start_display) . '</p>';
                             }
                         }
                     }
@@ -202,7 +178,7 @@ while (have_posts()) :
         $ical_url = get_ical_file_url($post_id);
         ?>
         <div class="addition">
-            <p>カレンダーに追加</p>
+            <p><?php echo esc_html(get_event_translation('add_to_calendar')); ?></p>
             <a href="<?php echo esc_url($google_url); ?>" target="_blank" rel="noopener noreferrer">
                 <span class="i-ico ico-google">google</span>
             </a>

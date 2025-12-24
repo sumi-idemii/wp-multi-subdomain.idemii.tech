@@ -3,16 +3,22 @@
  * Template part for displaying top category area section
  *
  * @package wp-multi-subdomain.idemii.tech
+ * @param array $args {
+ *     @type int $setting_no setting_noの値（デフォルト: 1）
+ * }
  */
 
-// トップページカテゴリ紹介エリア（setting_noが「1」の記事を取得）
+// setting_noを引数から取得（デフォルトは1）
+$setting_no = isset($args['setting_no']) ? intval($args['setting_no']) : 1;
+
+// トップページカテゴリ紹介エリア（setting_noで指定された記事を取得）
 $top_category_query = new WP_Query(array(
     'post_type'      => 'top_category_area',
     'posts_per_page' => 1,
     'meta_query'     => array(
         array(
             'key'     => 'setting_no',
-            'value'   => '1',
+            'value'   => $setting_no,
             'compare' => '='
         )
     ),
@@ -151,6 +157,27 @@ if ($top_category_query->have_posts()) :
                 <?php endif; ?>
             </article>
         </section>
+        
+        <?php
+        // page_categoryタクソノミーを取得
+        $page_categories = get_the_terms($post_id, 'page_category');
+        $page_category_ids = array();
+        
+        if ($page_categories && !is_wp_error($page_categories)) {
+            foreach ($page_categories as $category) {
+                $page_category_ids[] = $category->term_id;
+            }
+        }
+        
+        // page_categoryタクソノミーが設定されている場合、ニュースエリアを表示
+        if (!empty($page_category_ids)) {
+            // ニュースエリアのテンプレートパーツを読み込む
+            get_template_part('template-parts/home', 'category-news', array(
+                'page_category_ids' => $page_category_ids
+            ));
+        }
+        ?>
+        
         <?php
     endwhile;
     wp_reset_postdata();
