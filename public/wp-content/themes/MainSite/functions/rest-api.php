@@ -209,6 +209,21 @@ function add_acf_fields_to_rest_api($data, $post, $request) {
             // フィールドの設定を取得
             $field_object = get_field_object($field_name, $post->ID);
             
+            // events_venueとevents_target_visitorsフィールドの場合、改行を<br>に変換
+            if (($field_name === 'events_venue' || $field_name === 'events_target_visitors' || 
+                 $field_name === 'events-venue' || $field_name === 'events-target-visitors') && 
+                is_string($field_value) && !empty($field_value)) {
+                // 改行文字を直接<br>に置換（\r\n、\n、\rのすべてに対応）
+                $acf_fields[$field_name] = str_replace(array("\r\n", "\n", "\r"), '<br>', $field_value);
+            }
+            // その他のテキストエリアフィールドの場合、改行を<br>に変換
+            elseif ($field_object && $field_object['type'] === 'textarea') {
+                if (is_string($field_value) && !empty($field_value)) {
+                    // 改行文字を直接<br>に置換（\r\n、\n、\rのすべてに対応）
+                    $acf_fields[$field_name] = str_replace(array("\r\n", "\n", "\r"), '<br>', $field_value);
+                }
+            }
+            
             // タクソノミーフィールドの場合
             if ($field_object && $field_object['type'] === 'taxonomy') {
                 $taxonomy = $field_object['taxonomy'];
@@ -331,7 +346,14 @@ function add_acf_fields_to_rest_api($data, $post, $request) {
         $normalized_acf_fields = array();
         foreach ($acf_fields as $field_name => $field_value) {
             $normalized_field_name = str_replace('-', '_', $field_name);
-            $normalized_acf_fields[$normalized_field_name] = $field_value;
+            // 正規化後のフィールド名がevents_venueまたはevents_target_visitorsの場合、改行を<br>に変換
+            if (($normalized_field_name === 'events_venue' || $normalized_field_name === 'events_target_visitors') && 
+                is_string($field_value) && !empty($field_value)) {
+                // 改行文字を直接<br>に置換（\r\n、\n、\rのすべてに対応）
+                $normalized_acf_fields[$normalized_field_name] = str_replace(array("\r\n", "\n", "\r"), '<br>', $field_value);
+            } else {
+                $normalized_acf_fields[$normalized_field_name] = $field_value;
+            }
         }
         
         // ACFフィールドをレスポンスに追加
