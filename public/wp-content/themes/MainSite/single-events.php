@@ -33,59 +33,16 @@ while (have_posts()) :
         ?>
         <div class="event-fields">
             <?php
-            // 会場 (events_venue) - タクソノミー
+            // 会場 (events_venue) - テキストエリア
             $venue_field = get_field('events_venue', $post_id);
-            if ($venue_field) {
-                $venue_names = array();
-                $venue_ids = is_array($venue_field) ? $venue_field : array($venue_field);
-                
-                // タクソノミー名を取得（ハイフン形式とアンダースコア形式の両方を試す）
-                $venue_taxonomy = 'events_venue';
-                if (!taxonomy_exists($venue_taxonomy)) {
-                    $venue_taxonomy = 'events-venue';
-                }
-                
-                foreach ($venue_ids as $venue_id) {
-                    if (is_numeric($venue_id)) {
-                        $term = get_term($venue_id, $venue_taxonomy);
-                        if ($term && !is_wp_error($term)) {
-                            $venue_names[] = $term->name;
-                        }
-                    } elseif (is_object($venue_id) && get_class($venue_id) === 'WP_Term') {
-                        $venue_names[] = $venue_id->name;
-                    }
-                }
-                
-                if (!empty($venue_names)) {
-                    echo '<p><strong>' . esc_html(get_event_translation('venue')) . ':</strong> ' . esc_html(implode(', ', $venue_names)) . '</p>';
-                }
+            if (!empty($venue_field)) {
+                echo '<p><strong>' . esc_html(get_event_translation('venue')) . ':</strong> ' . nl2br(esc_html($venue_field)) . '</p>';
             }
             
-            // 対象参加者 (events_target_visitors) - タクソノミー
+            // 対象参加者 (events_target_visitors) - テキストエリア
             $target_visitors_field = get_field('events_target_visitors', $post_id);
-            if ($target_visitors_field) {
-                $visitor_names = array();
-                $visitor_ids = is_array($target_visitors_field) ? $target_visitors_field : array($target_visitors_field);
-                
-                $visitor_taxonomy = 'events_target_visitors';
-                if (!taxonomy_exists($visitor_taxonomy)) {
-                    $visitor_taxonomy = 'events-target-visitors';
-                }
-                
-                foreach ($visitor_ids as $visitor_id) {
-                    if (is_numeric($visitor_id)) {
-                        $term = get_term($visitor_id, $visitor_taxonomy);
-                        if ($term && !is_wp_error($term)) {
-                            $visitor_names[] = $term->name;
-                        }
-                    } elseif (is_object($visitor_id) && get_class($visitor_id) === 'WP_Term') {
-                        $visitor_names[] = $visitor_id->name;
-                    }
-                }
-                
-                if (!empty($visitor_names)) {
-                    echo '<p><strong>' . esc_html(get_event_translation('target_visitors')) . ':</strong> ' . esc_html(implode(', ', $visitor_names)) . '</p>';
-                }
+            if (!empty($target_visitors_field)) {
+                echo '<p><strong>' . esc_html(get_event_translation('target_visitors')) . ':</strong> ' . nl2br(esc_html($target_visitors_field)) . '</p>';
             }
             
             // 使用言語 (events_language) - チェックボックス
@@ -103,31 +60,54 @@ while (have_posts()) :
                 echo '<p><strong>' . esc_html(get_event_translation('fee')) . ':</strong> ' . esc_html($fee_field) . '</p>';
             }
             
-            // 運営チーム (events_team) - タクソノミー
-            $team_field = get_field('events_team', $post_id);
-            if ($team_field) {
-                $team_names = array();
-                $team_ids = is_array($team_field) ? $team_field : array($team_field);
-                
-                $team_taxonomy = 'events_team';
-                if (!taxonomy_exists($team_taxonomy)) {
-                    $team_taxonomy = 'events-team';
-                }
-                
-                foreach ($team_ids as $team_id) {
-                    if (is_numeric($team_id)) {
-                        $term = get_term($team_id, $team_taxonomy);
-                        if ($term && !is_wp_error($term)) {
-                            $team_names[] = $term->name;
+            // 組織 (organisation) - タクソノミー（返り値：タームオブジェクト）
+            $organisation_field = get_field('organisation', $post_id);
+            $organisation_names = array();
+            
+            // ACFフィールドから取得を試行
+            if ($organisation_field) {
+                // 配列の場合（複数のタームオブジェクト）
+                if (is_array($organisation_field) && !empty($organisation_field)) {
+                    foreach ($organisation_field as $term) {
+                        // WP_Termオブジェクトの場合
+                        if (is_object($term)) {
+                            // instanceof WP_Term または get_class() で確認
+                            if ($term instanceof WP_Term) {
+                                $organisation_names[] = $term->name;
+                            } elseif (get_class($term) === 'WP_Term') {
+                                $organisation_names[] = $term->name;
+                            } elseif (isset($term->name)) {
+                                // オブジェクトにnameプロパティがある場合
+                                $organisation_names[] = $term->name;
+                            }
                         }
-                    } elseif (is_object($team_id) && get_class($team_id) === 'WP_Term') {
-                        $team_names[] = $team_id->name;
+                    }
+                } elseif (is_object($organisation_field)) {
+                    // 単一のWP_Termオブジェクトの場合
+                    if ($organisation_field instanceof WP_Term) {
+                        $organisation_names[] = $organisation_field->name;
+                    } elseif (get_class($organisation_field) === 'WP_Term') {
+                        $organisation_names[] = $organisation_field->name;
+                    } elseif (isset($organisation_field->name)) {
+                        // オブジェクトにnameプロパティがある場合
+                        $organisation_names[] = $organisation_field->name;
                     }
                 }
-                
-                if (!empty($team_names)) {
-                    echo '<p><strong>' . esc_html(get_event_translation('team')) . ':</strong> ' . esc_html(implode(', ', $team_names)) . '</p>';
+            }
+            
+            // ACFフィールドから取得できなかった場合、直接タクソノミーから取得
+            if (empty($organisation_names)) {
+                $organisation_terms = get_the_terms($post_id, 'organisation');
+                if ($organisation_terms && !is_wp_error($organisation_terms)) {
+                    foreach ($organisation_terms as $term) {
+                        $organisation_names[] = $term->name;
+                    }
                 }
+            }
+            
+            // 表示
+            if (!empty($organisation_names)) {
+                echo '<p><strong>' . esc_html(get_event_translation('team')) . ':</strong> ' . esc_html(implode(', ', $organisation_names)) . '</p>';
             }
             
             // イベント開催テキストを取得（1つのフィールドのみ）

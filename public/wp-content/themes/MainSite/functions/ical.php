@@ -234,7 +234,6 @@ function parse_datetime_from_field($datetime_string) {
 /**
  * イベントの複数の日程セットを取得
  * ACFフィールドが1〜12まで存在する場合に対応
- * events_venueはすべての日程で共通
  * 
  * @param int $post_id 投稿ID
  * @return array 日程セットの配列
@@ -242,26 +241,8 @@ function parse_datetime_from_field($datetime_string) {
 function get_event_schedules($post_id) {
     $schedules = array();
     
-    // 共通の会場を取得（events_venue、サフィックスなし）
-    $common_venue_field = get_field('events_venue', $post_id);
+    // 共通の会場（events_venueタクソノミーは削除されたため、会場情報は取得しない）
     $common_location = '';
-    
-    if ($common_venue_field) {
-        if (is_array($common_venue_field)) {
-            $venue_ids = $common_venue_field;
-        } else {
-            $venue_ids = array($common_venue_field);
-        }
-        
-        $venue_names = array();
-        foreach ($venue_ids as $venue_id) {
-            $term = get_term($venue_id, 'events-venue');
-            if ($term && !is_wp_error($term)) {
-                $venue_names[] = $term->name;
-            }
-        }
-        $common_location = implode(', ', $venue_names);
-    }
     
     // 1〜12までのフィールドをチェック
     // ACFフィールド名は events_start_date_1, events_start_date_2, ... events_start_date_12 の形式

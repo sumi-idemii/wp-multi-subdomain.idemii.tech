@@ -35,13 +35,13 @@ function get_taxonomy_term_color($term) {
     }
     
     // 方法2: taxonomy_{taxonomy}_{term_id}形式
-    $color = get_field('color', 'taxonomy_events_team_' . $term->term_id);
+    $color = get_field('color', 'taxonomy_organisation_' . $term->term_id);
     if ($color !== false && $color !== null && $color !== '') {
         return $color;
     }
     
     // 方法3: {taxonomy}_{term_id}形式
-    $color = get_field('color', 'events_team_' . $term->term_id);
+    $color = get_field('color', 'organisation_' . $term->term_id);
     if ($color !== false && $color !== null && $color !== '') {
         return $color;
     }
@@ -131,6 +131,60 @@ function get_taxonomy_term_color($term) {
 }
 
 /**
+ * タクソノミータームのACFフィールドからテキストエリアの値を取得
+ * 複数の形式とフィールド名を試してテキストエリアフィールドを取得する
+ * 
+ * @param WP_Term|object $term タームオブジェクト
+ * @param array $field_names 試すフィールド名の配列（デフォルト: ['description', 'text', 'textarea']）
+ * @return string|null テキストエリアの値、取得できない場合はnull
+ */
+function get_taxonomy_term_textarea($term, $field_names = array('description', 'text', 'textarea')) {
+    if (!$term || is_wp_error($term)) {
+        return null;
+    }
+    
+    if (!function_exists('get_field')) {
+        return null;
+    }
+    
+    // フィールド名が指定されていない場合はデフォルトを使用
+    if (empty($field_names)) {
+        $field_names = array('description', 'text', 'textarea');
+    }
+    
+    // 各フィールド名を試す
+    foreach ($field_names as $field_name) {
+        $value = null;
+        
+        // 方法1: タームオブジェクトを直接渡す（推奨）
+        $value = get_field($field_name, $term);
+        if ($value !== false && $value !== null && $value !== '') {
+            return $value;
+        }
+        
+        // 方法2: taxonomy_{taxonomy}_{term_id}形式
+        $value = get_field($field_name, 'taxonomy_' . $term->taxonomy . '_' . $term->term_id);
+        if ($value !== false && $value !== null && $value !== '') {
+            return $value;
+        }
+        
+        // 方法3: {taxonomy}_{term_id}形式
+        $value = get_field($field_name, $term->taxonomy . '_' . $term->term_id);
+        if ($value !== false && $value !== null && $value !== '') {
+            return $value;
+        }
+        
+        // 方法4: タームIDのみを使用（ACFの設定によっては有効）
+        $value = get_field($field_name, $term->term_id);
+        if ($value !== false && $value !== null && $value !== '') {
+            return $value;
+        }
+    }
+    
+    return null;
+}
+
+/**
  * カスタム投稿タイプのREST APIレスポンスにACFフィールドを追加
  * タクソノミーフィールドの値をターム名に変換
  * events投稿タイプの場合は複数の日程セットを配列として追加
@@ -147,6 +201,11 @@ function add_acf_fields_to_rest_api($data, $post, $request) {
     if ($acf_fields) {
         // タクソノミーフィールドの値をターム名に変換
         foreach ($acf_fields as $field_name => $field_value) {
+            // falseやnullの場合はスキップ
+            if ($field_value === false || $field_value === null) {
+                continue;
+            }
+            
             // フィールドの設定を取得
             $field_object = get_field_object($field_name, $post->ID);
             
@@ -154,8 +213,8 @@ function add_acf_fields_to_rest_api($data, $post, $request) {
             if ($field_object && $field_object['type'] === 'taxonomy') {
                 $taxonomy = $field_object['taxonomy'];
                 
-                // events_teamタクソノミーの場合は、タームオブジェクト（id, name, color）を含める
-                if ($taxonomy === 'events_team') {
+                // organisationタクソノミーの場合は、タームオブジェクト（id, name, color）を含める
+                if ($taxonomy === 'organisation') {
                     $term_objects = array();
                     
                     // タームIDの配列、ターム名の配列、またはタームオブジェクトの配列の場合
@@ -268,7 +327,7 @@ function add_acf_fields_to_rest_api($data, $post, $request) {
             $acf_fields['event_schedules'] = $schedules;
         }
         
-        // フィールド名をハイフンからアンダースコアに変換（events-venue → events_venue）
+        // フィールド名をハイフンからアンダースコアに変換
         $normalized_acf_fields = array();
         foreach ($acf_fields as $field_name => $field_value) {
             $normalized_field_name = str_replace('-', '_', $field_name);
@@ -285,7 +344,7 @@ function add_acf_fields_to_rest_api($data, $post, $request) {
 /**
  * REST APIレスポンスのルートレベルのタクソノミーフィールドをターム名に変換
  * ACFが自動的に追加したタクソノミーフィールドを変換
- * events_teamタクソノミーの場合は、タームオブジェクト（id, name, color）を含める
+ * organisationタクソノミーの場合は、タームオブジェクト（id, name, color）を含める
  */
 function convert_taxonomy_fields_to_names($data, $post, $request) {
     // ACFプラグインが有効な場合のみ実行
@@ -297,7 +356,12 @@ function convert_taxonomy_fields_to_names($data, $post, $request) {
     if (isset($data->data) && is_array($data->data)) {
         $normalized_data = array();
         foreach ($data->data as $field_name => $field_value) {
-            // フィールド名をハイフンからアンダースコアに変換（events-venue → events_venue）
+            // falseやnullの場合はスキップ
+            if ($field_value === false || $field_value === null) {
+                continue;
+            }
+            
+            // フィールド名をハイフンからアンダースコアに変換
             $normalized_field_name = str_replace('-', '_', $field_name);
             
             // フィールド名がタクソノミー名と一致する可能性がある場合
@@ -310,8 +374,8 @@ function convert_taxonomy_fields_to_names($data, $post, $request) {
             if (taxonomy_exists($taxonomy) || taxonomy_exists($normalized_taxonomy)) {
                 // 実際のタクソノミー名を使用
                 $actual_taxonomy = taxonomy_exists($taxonomy) ? $taxonomy : $normalized_taxonomy;
-                // events_teamタクソノミーの場合は、タームオブジェクト（id, name, color）を含める
-                if ($actual_taxonomy === 'events_team') {
+                // organisationタクソノミーの場合は、タームオブジェクト（id, name, color）を含める
+                if ($actual_taxonomy === 'organisation') {
                     $term_objects = array();
                     
                     // タームIDの配列の場合
@@ -343,8 +407,8 @@ function convert_taxonomy_fields_to_names($data, $post, $request) {
                                 );
                             }
                         }
-                        // 正規化されたフィールド名で保存
-                        $normalized_data[$normalized_field_name] = $term_objects;
+                        // フィールド名をorganisationに統一
+                        $normalized_data['organisation'] = $term_objects;
                         // 元のフィールド名を削除
                         unset($data->data[$field_name]);
                     } elseif (is_numeric($field_value)) {
@@ -354,8 +418,8 @@ function convert_taxonomy_fields_to_names($data, $post, $request) {
                             // タームのACFフィールドからcolorを取得
                             $color = get_taxonomy_term_color($term);
                             
-                            // ターム情報をオブジェクトとして追加（正規化されたフィールド名で保存）
-                            $normalized_data[$normalized_field_name] = array(
+                            // ターム情報をオブジェクトとして追加（フィールド名をorganisationに統一）
+                            $normalized_data['organisation'] = array(
                                 'id' => $term->term_id,
                                 'name' => $term->name,
                                 'color' => $color
@@ -373,8 +437,8 @@ function convert_taxonomy_fields_to_names($data, $post, $request) {
                             // タームのACFフィールドからcolorを取得
                             $color = get_taxonomy_term_color($term);
                             
-                            // ターム情報をオブジェクトとして追加（正規化されたフィールド名で保存）
-                            $normalized_data[$normalized_field_name] = array(
+                            // ターム情報をオブジェクトとして追加（フィールド名をorganisationに統一）
+                            $normalized_data['organisation'] = array(
                                 'id' => $term->term_id,
                                 'name' => $term->name,
                                 'color' => $color
@@ -415,8 +479,8 @@ function convert_taxonomy_fields_to_names($data, $post, $request) {
                 if ($field_object && $field_object['type'] === 'taxonomy') {
                     $taxonomy = $field_object['taxonomy'];
                     
-                    // events_teamタクソノミーの場合は、タームオブジェクト（id, name, color）を含める
-                    if ($taxonomy === 'events_team') {
+                    // organisationタクソノミーの場合は、タームオブジェクト（id, name, color）を含める
+                    if ($taxonomy === 'organisation') {
                         $term_objects = array();
                         
                         // タームIDの配列の場合
@@ -562,10 +626,10 @@ add_filter('rest_prepare_news', 'convert_taxonomy_fields_to_names', 20, 3);
 add_filter('rest_prepare_events', 'convert_taxonomy_fields_to_names', 20, 3);
 
 /**
- * events投稿タイプのREST APIレスポンスでevents_teamタクソノミーにcolorを追加
+ * events投稿タイプのREST APIレスポンスでorganisationタクソノミーにcolorを追加
  * ターム名の配列になっている場合も処理する（優先度30で最後に実行）
  */
-function add_color_to_events_team_in_rest_api($data, $post, $request) {
+function add_color_to_organisation_in_rest_api($data, $post, $request) {
     // events投稿タイプの場合のみ実行
     if ($post->post_type !== 'events') {
         return $data;
@@ -576,31 +640,31 @@ function add_color_to_events_team_in_rest_api($data, $post, $request) {
         return $data;
     }
 
-    // events_teamタクソノミーが存在する場合
-    if (isset($data->data['events_team']) && !empty($data->data['events_team'])) {
-        $events_team = $data->data['events_team'];
+    // organisationタクソノミーが存在する場合
+    if (isset($data->data['organisation']) && !empty($data->data['organisation'])) {
+        $organisation = $data->data['organisation'];
         $term_objects = array();
 
         // 既にタームオブジェクトの配列になっている場合はスキップ
-        if (is_array($events_team) && !empty($events_team) && isset($events_team[0]) && is_array($events_team[0]) && isset($events_team[0]['id'])) {
+        if (is_array($organisation) && !empty($organisation) && isset($organisation[0]) && is_array($organisation[0]) && isset($organisation[0]['id'])) {
             // 既にタームオブジェクト形式なので、そのまま返す
             return $data;
         }
 
         // ターム名の配列の場合
-        if (is_array($events_team)) {
-            foreach ($events_team as $term_value) {
+        if (is_array($organisation)) {
+            foreach ($organisation as $term_value) {
                 $term = null;
                 
                 // 数値の場合はタームIDとして処理
                 if (is_numeric($term_value)) {
-                    $term = get_term($term_value, 'events_team');
+                    $term = get_term($term_value, 'organisation');
                 } else {
                     // 文字列の場合はターム名として処理（ターム名からタームIDを逆引き）
-                    $term = get_term_by('name', $term_value, 'events_team');
+                    $term = get_term_by('name', $term_value, 'organisation');
                     if (!$term) {
                         // スラッグでも試す
-                        $term = get_term_by('slug', $term_value, 'events_team');
+                        $term = get_term_by('slug', $term_value, 'organisation');
                     }
                 }
                 
@@ -617,36 +681,36 @@ function add_color_to_events_team_in_rest_api($data, $post, $request) {
                 }
             }
             
-            // events_teamを更新
+            // organisationを更新
             if (!empty($term_objects)) {
-                $data->data['events_team'] = $term_objects;
+                $data->data['organisation'] = $term_objects;
             }
-        } elseif (is_string($events_team)) {
+        } elseif (is_string($organisation)) {
             // 単一のターム名の場合
-            $term = get_term_by('name', $events_team, 'events_team');
+            $term = get_term_by('name', $organisation, 'organisation');
             if (!$term) {
-                $term = get_term_by('slug', $events_team, 'events_team');
+                $term = get_term_by('slug', $organisation, 'organisation');
             }
             if ($term && !is_wp_error($term)) {
                 // タームのACFフィールドからcolorを取得
                 $color = get_taxonomy_term_color($term);
                 
                 // ターム情報をオブジェクトとして追加
-                $data->data['events_team'] = array(
+                $data->data['organisation'] = array(
                     'id' => $term->term_id,
                     'name' => $term->name,
                     'color' => $color
                 );
             }
-        } elseif (is_numeric($events_team)) {
+        } elseif (is_numeric($organisation)) {
             // 単一のタームIDの場合
-            $term = get_term($events_team, 'events_team');
+            $term = get_term($organisation, 'organisation');
             if ($term && !is_wp_error($term)) {
                 // タームのACFフィールドからcolorを取得
                 $color = get_taxonomy_term_color($term);
                 
                 // ターム情報をオブジェクトとして追加
-                $data->data['events_team'] = array(
+                $data->data['organisation'] = array(
                     'id' => $term->term_id,
                     'name' => $term->name,
                     'color' => $color
@@ -658,7 +722,7 @@ function add_color_to_events_team_in_rest_api($data, $post, $request) {
     return $data;
 }
 // events投稿タイプのREST APIレスポンスに適用（優先度30で、他の処理より後に実行）
-add_filter('rest_prepare_events', 'add_color_to_events_team_in_rest_api', 30, 3);
+add_filter('rest_prepare_events', 'add_color_to_organisation_in_rest_api', 30, 3);
 
 
 /**

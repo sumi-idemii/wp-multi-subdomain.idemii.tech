@@ -50,15 +50,6 @@ if ($category_news_query->have_posts()) :
                 
                 // 日付を取得
                 $post_date = get_the_date('Y年m月d日', $post_id);
-                
-                // news_categoryタクソノミーを取得
-                $news_categories = get_the_terms($post_id, 'news_category');
-                $category_names = array();
-                if ($news_categories && !is_wp_error($news_categories)) {
-                    foreach ($news_categories as $category) {
-                        $category_names[] = $category->name;
-                    }
-                }
                 ?>
                 <li class="p-top-category-news-item">
                     <a href="<?php echo esc_url(get_permalink($post_id)); ?>" class="p-top-category-news-link">
@@ -76,11 +67,6 @@ if ($category_news_query->have_posts()) :
                                     <time class="p-top-category-news-date" datetime="<?php echo esc_attr(get_the_date('c', $post_id)); ?>">
                                         <?php echo esc_html($post_date); ?>
                                     </time>
-                                <?php endif; ?>
-                                <?php if (!empty($category_names)) : ?>
-                                    <span class="p-top-category-news-category">
-                                        <?php echo esc_html(implode(', ', $category_names)); ?>
-                                    </span>
                                 <?php endif; ?>
                             </div>
                         </div>

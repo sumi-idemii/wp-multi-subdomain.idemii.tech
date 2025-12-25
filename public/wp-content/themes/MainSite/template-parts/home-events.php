@@ -36,60 +36,6 @@ if ($events_query->have_posts()) :
                     ?>
                     <div class="p-top-events-fields">
                         <?php
-                        // 会場 (events_venue) - タクソノミー
-                        $venue_field = get_field('events_venue', $post_id);
-                        if ($venue_field) {
-                            $venue_names = array();
-                            $venue_ids = is_array($venue_field) ? $venue_field : array($venue_field);
-                            
-                            $venue_taxonomy = 'events_venue';
-                            if (!taxonomy_exists($venue_taxonomy)) {
-                                $venue_taxonomy = 'events-venue';
-                            }
-                            
-                            foreach ($venue_ids as $venue_id) {
-                                if (is_numeric($venue_id)) {
-                                    $term = get_term($venue_id, $venue_taxonomy);
-                                    if ($term && !is_wp_error($term)) {
-                                        $venue_names[] = $term->name;
-                                    }
-                                } elseif (is_object($venue_id) && get_class($venue_id) === 'WP_Term') {
-                                    $venue_names[] = $venue_id->name;
-                                }
-                            }
-                            
-                            if (!empty($venue_names)) {
-                                echo '<p><strong>' . esc_html(get_event_translation('venue')) . ':</strong> ' . esc_html(implode(', ', $venue_names)) . '</p>';
-                            }
-                        }
-                        
-                        // 対象参加者 (events_target_visitors) - タクソノミー
-                        $target_visitors_field = get_field('events_target_visitors', $post_id);
-                        if ($target_visitors_field) {
-                            $visitor_names = array();
-                            $visitor_ids = is_array($target_visitors_field) ? $target_visitors_field : array($target_visitors_field);
-                            
-                            $visitor_taxonomy = 'events_target_visitors';
-                            if (!taxonomy_exists($visitor_taxonomy)) {
-                                $visitor_taxonomy = 'events-target-visitors';
-                            }
-                            
-                            foreach ($visitor_ids as $visitor_id) {
-                                if (is_numeric($visitor_id)) {
-                                    $term = get_term($visitor_id, $visitor_taxonomy);
-                                    if ($term && !is_wp_error($term)) {
-                                        $visitor_names[] = $term->name;
-                                    }
-                                } elseif (is_object($visitor_id) && get_class($visitor_id) === 'WP_Term') {
-                                    $visitor_names[] = $visitor_id->name;
-                                }
-                            }
-                            
-                            if (!empty($visitor_names)) {
-                                echo '<p><strong>' . esc_html(get_event_translation('target_visitors')) . ':</strong> ' . esc_html(implode(', ', $visitor_names)) . '</p>';
-                            }
-                        }
-                        
                         // 使用言語 (events_language) - チェックボックス
                         $language_field = get_field('events_language', $post_id);
                         if ($language_field) {
@@ -105,50 +51,49 @@ if ($events_query->have_posts()) :
                             echo '<p><strong>' . esc_html(get_event_translation('fee')) . ':</strong> ' . esc_html($fee_field) . '</p>';
                         }
                         
-                        // 運営チーム (events_team) - タクソノミー（color属性付き）
-                        $team_field = get_field('events_team', $post_id);
-                        if ($team_field) {
-                            $team_items = array();
-                            $team_ids = is_array($team_field) ? $team_field : array($team_field);
+                        // 組織 (organisation) - タクソノミー（color属性付き）
+                        $organisation_field = get_field('organisation', $post_id);
+                        
+                        // フィールドが存在し、値がある場合のみ処理
+                        if ($organisation_field !== false && $organisation_field !== null && $organisation_field !== '') {
+                            $organisation_items = array();
+                            $organisation_ids = is_array($organisation_field) ? $organisation_field : array($organisation_field);
                             
-                            $team_taxonomy = 'events_team';
-                            if (!taxonomy_exists($team_taxonomy)) {
-                                $team_taxonomy = 'events-team';
-                            }
+                            $organisation_taxonomy = 'organisation';
                             
-                            foreach ($team_ids as $team_id) {
-                                $term = null;
+                            foreach ($organisation_ids as $organisation_id) {
+                                $organisation = null;
                                 
-                                if (is_numeric($team_id)) {
-                                    $term = get_term($team_id, $team_taxonomy);
-                                } elseif (is_object($team_id) && get_class($team_id) === 'WP_Term') {
-                                    $term = $team_id;
+                                if (is_numeric($organisation_id)) {
+                                    $organisation = get_term($organisation_id, $organisation_taxonomy);
+                                } elseif (is_object($organisation_id) && get_class($organisation_id) === 'WP_Term') {
+                                    $organisation = $organisation_id;
                                 }
                                 
-                                if ($term && !is_wp_error($term)) {
+                                if ($organisation && !is_wp_error($organisation)) {
                                     // color属性を取得
                                     $color = '';
                                     if (function_exists('get_taxonomy_term_color')) {
-                                        $color = get_taxonomy_term_color($term);
+                                        $color = get_taxonomy_term_color($organisation);
                                     } else {
                                         // get_taxonomy_term_color関数が利用できない場合のフォールバック
-                                        $color = get_field('color', $term);
+                                        $color = get_field('color', $organisation);
                                         if ($color === false || $color === null || $color === '') {
-                                            $color = get_field('color', 'taxonomy_events_team_' . $term->term_id);
+                                            $color = get_field('color', 'taxonomy_organisation_' . $organisation->term_id);
                                         }
                                     }
                                     
                                     // ターム名とcolorを組み合わせて表示
-                                    $team_display = esc_html($term->name);
+                                    $organisation_display = esc_html($organisation->name);
                                     if (!empty($color)) {
-                                        $team_display .= ' (color: ' . esc_html($color) . ')';
+                                        $organisation_display .= ' (color: ' . esc_html($color) . ')';
                                     }
-                                    $team_items[] = $team_display;
+                                    $organisation_items[] = $organisation_display;
                                 }
                             }
                             
-                            if (!empty($team_items)) {
-                                echo '<p><strong>' . esc_html(get_event_translation('team')) . ':</strong> ' . implode(', ', $team_items) . '</p>';
+                            if (!empty($organisation_items)) {
+                                echo '<p><strong>' . esc_html(get_event_translation('team')) . ':</strong> ' . implode(', ', $organisation_items) . '</p>';
                             }
                         }
                         

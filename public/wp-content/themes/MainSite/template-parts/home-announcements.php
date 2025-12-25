@@ -25,15 +25,6 @@ if ($notice_query->have_posts()) :
                 
                 // 日付を取得
                 $post_date = get_the_date('Y年m月d日', $post_id);
-                
-                // announcements_categoryタクソノミーを取得
-                $notice_categories = get_the_terms($post_id, 'announcements_category');
-                $category_names = array();
-                if ($notice_categories && !is_wp_error($notice_categories)) {
-                    foreach ($notice_categories as $category) {
-                        $category_names[] = $category->name;
-                    }
-                }
                 ?>
                 <li class="p-top-notice-item">
                     <a href="<?php echo esc_url(get_permalink($post_id)); ?>" class="p-top-notice-link">
@@ -42,11 +33,6 @@ if ($notice_query->have_posts()) :
                                 <time class="p-top-notice-date" datetime="<?php echo esc_attr(get_the_date('c', $post_id)); ?>">
                                     <?php echo esc_html($post_date); ?>
                                 </time>
-                            <?php endif; ?>
-                            <?php if (!empty($category_names)) : ?>
-                                <span class="p-top-notice-category">
-                                    <?php echo esc_html(implode(', ', $category_names)); ?>
-                                </span>
                             <?php endif; ?>
                         </div>
                         <h3 class="p-top-notice-title-item">
