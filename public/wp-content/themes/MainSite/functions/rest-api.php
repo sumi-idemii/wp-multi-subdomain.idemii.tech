@@ -987,6 +987,113 @@ function enable_polylang_rest_api() {
 add_action('rest_api_init', 'enable_polylang_rest_api', 10);
 
 /**
+ * 言語プレフィックス付きのREST APIリクエストを処理
+ * /ja/wp-json/wp/v2/events のようなリクエストを正しく処理する
+ * rest_pre_dispatchフックで早期に処理
+ */
+function handle_polylang_rest_api_pre_dispatch($result, $server, $request) {
+    // Polylangが有効でない場合は何もしない
+    if (!function_exists('pll_languages_list')) {
+        return $result;
+    }
+    
+    // リクエストURIを取得
+    $request_uri = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
+    
+    // 言語プレフィックス付きのREST APIパスをチェック
+    if (preg_match('/\/([a-z]{2})\/wp-json\/(.*)/', $request_uri, $matches)) {
+        $lang_code = $matches[1];
+        $rest_path = $matches[2];
+        
+        // 言語コードが有効な言語か確認
+        $languages = pll_languages_list();
+        if (in_array($lang_code, $languages)) {
+            // 現在の言語を設定
+            if (function_exists('PLL')) {
+                PLL()->curlang = PLL()->model->get_language($lang_code);
+            }
+        }
+    }
+    
+    return $result;
+}
+add_filter('rest_pre_dispatch', 'handle_polylang_rest_api_pre_dispatch', 10, 3);
+
+/**
+ * template_redirectフックで言語プレフィックス付きのREST APIリクエストを処理
+ * index.phpが表示されるのを防ぐ
+ */
+function handle_polylang_rest_api_template_redirect() {
+    // Polylangが有効でない場合は何もしない
+    if (!function_exists('pll_languages_list')) {
+        return;
+    }
+    
+    // リクエストURIを取得
+    $request_uri = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
+    
+    // 言語プレフィックス付きのREST APIパスをチェック
+    if (preg_match('/\/([a-z]{2})\/wp-json\/(.*)/', $request_uri, $matches)) {
+        $lang_code = $matches[1];
+        $rest_path = $matches[2];
+        
+        // 言語コードが有効な言語か確認
+        $languages = pll_languages_list();
+        if (in_array($lang_code, $languages)) {
+            // 現在の言語を設定
+            if (function_exists('PLL')) {
+                PLL()->curlang = PLL()->model->get_language($lang_code);
+            }
+            
+            // REST APIのルーティングを処理
+            $rest_server = rest_get_server();
+            $route = '/' . $rest_path;
+            
+            // クエリパラメータを取得
+            $query_params = array();
+            if (isset($_SERVER['QUERY_STRING']) && !empty($_SERVER['QUERY_STRING'])) {
+                parse_str($_SERVER['QUERY_STRING'], $query_params);
+            }
+            
+            // REST APIリクエストを作成
+            $request = new WP_REST_Request('GET', $route, $query_params);
+            
+            // REST APIレスポンスを取得
+            $response = $rest_server->dispatch($request);
+            
+            // すべての出力をクリア
+            if (ob_get_level()) {
+                ob_end_clean();
+            }
+            
+            // ヘッダーを送信
+            $response->header('Content-Type', 'application/json; charset=' . get_option('blog_charset'));
+            $response->header('X-Content-Type-Options', 'nosniff');
+            
+            // ステータスコードを設定
+            status_header($response->get_status());
+            
+            // レスポンスヘッダーをすべて送信
+            $headers = $response->get_headers();
+            foreach ($headers as $key => $value) {
+                if (is_array($value)) {
+                    $value = implode(', ', $value);
+                }
+                header(sprintf('%s: %s', $key, $value));
+            }
+            
+            // JSONレスポンスを送信
+            $data = $response->get_data();
+            $json = wp_json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            
+            echo $json;
+            exit;
+        }
+    }
+}
+add_action('template_redirect', 'handle_polylang_rest_api_template_redirect', 1);
+
+/**
  * REST APIのレスポンスに言語情報を追加
  * Polylangが有効な場合、レスポンスに言語コードを追加
  */
