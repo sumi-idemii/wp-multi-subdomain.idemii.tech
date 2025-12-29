@@ -169,8 +169,8 @@ define('PER_PAGE_EVENTS', 12);
 define('PER_PAGE_SEARCH', 6);
 define('PER_PAGE', -1);
 define('PAGES_DATA_CACHE_TIME', 60 * 5); // ページデータのキャッシュ時間（5分）
-// assets用定数の宣言（親テーマのアセットを常に参照する）
-define('WP_ASSETS_PATH', get_template_directory_uri() . '/assets/');
+// assets用定数の宣言（WordPressルートのアセットを参照する）
+define('WP_ASSETS_PATH', get_site_url() . '/assets/');
 define('WP_ASSETS_VERSION', '202509231727');
 // TDK用定数の宣言
 // 改修箇所
