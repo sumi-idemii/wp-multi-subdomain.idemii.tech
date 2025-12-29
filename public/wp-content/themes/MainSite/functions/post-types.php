@@ -42,7 +42,7 @@ add_action('admin_menu', 'hide_setting_post_type_menus', 999);
 
 /**
  * 左メニューの並び順をカスタマイズ
- * 順序: (1) ダッシュボード (2) 固定ページ (3) ACFの投稿タイプ一覧の投稿タイプ順 (4) サイト設定 (5) 他、WordPressの標準メニュー
+ * 順序: (1) ダッシュボード (2) 固定ページ (3) ACFの投稿タイプ一覧の投稿タイプ順 (4) 他、WordPressの標準メニュー
  */
 function reorder_admin_menu_by_custom_order() {
     global $menu;
@@ -104,7 +104,6 @@ function reorder_admin_menu_by_custom_order() {
     $dashboard_menu = null;
     $page_menu = null;
     $acf_post_type_menus = array();
-    $site_settings_menu = null;
     $other_menus = array();
     
     // 既存のメニューを分類
@@ -124,9 +123,8 @@ function reorder_admin_menu_by_custom_order() {
                 continue;
             }
             
-            // (4) サイト設定
+            // サイト設定メニューを除外
             if ($menu_slug === 'theme-general-settings') {
-                $site_settings_menu = $menu_item;
                 continue;
             }
             
@@ -146,7 +144,7 @@ function reorder_admin_menu_by_custom_order() {
                 }
             }
             
-            // (5) その他のメニュー
+            // (4) その他のメニュー
             $other_menus[] = $menu_item;
         } else {
             $other_menus[] = $menu_item;
@@ -174,12 +172,7 @@ function reorder_admin_menu_by_custom_order() {
         $ordered_menu[] = $item['menu'];
     }
     
-    // (4) サイト設定
-    if ($site_settings_menu !== null) {
-        $ordered_menu[] = $site_settings_menu;
-    }
-    
-    // (5) その他のメニュー
+    // (4) その他のメニュー
     foreach ($other_menus as $menu_item) {
         $ordered_menu[] = $menu_item;
     }
