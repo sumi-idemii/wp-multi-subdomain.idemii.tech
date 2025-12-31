@@ -1019,6 +1019,36 @@ function add_language_to_rest_api_response($response, $post, $request) {
 add_filter('rest_prepare_events', 'add_language_to_rest_api_response', 10, 3);
 add_filter('rest_prepare_news', 'add_language_to_rest_api_response', 10, 3);
 
+/**
+ * REST APIのレスポンスにサイト名を追加
+ * マルチサイト環境で各投稿にサイト名を追加
+ */
+function add_site_name_to_rest_api_response($response, $post, $request) {
+    // マルチサイト環境の場合
+    if (is_multisite()) {
+        $current_blog_id = get_current_blog_id();
+        $site_name = get_bloginfo('name');
+        $site_url = get_site_url($current_blog_id);
+        
+        $response->data['site_id'] = $current_blog_id;
+        $response->data['site_name'] = $site_name;
+        $response->data['site_url'] = $site_url;
+    } else {
+        // シングルサイト環境の場合もサイト名を追加
+        $site_name = get_bloginfo('name');
+        $site_url = get_site_url();
+        
+        $response->data['site_id'] = 1;
+        $response->data['site_name'] = $site_name;
+        $response->data['site_url'] = $site_url;
+    }
+    
+    return $response;
+}
+// カスタム投稿タイプのREST APIレスポンスにサイト名を追加
+add_filter('rest_prepare_events', 'add_site_name_to_rest_api_response', 10, 3);
+add_filter('rest_prepare_news', 'add_site_name_to_rest_api_response', 10, 3);
+
 // ニュース関連のREST API処理を読み込み
 require_once get_template_directory() . '/functions/rest-api-news.php';
 
