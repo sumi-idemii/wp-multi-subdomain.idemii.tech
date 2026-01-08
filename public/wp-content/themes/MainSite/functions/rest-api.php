@@ -722,6 +722,8 @@ function allow_public_rest_api_access($result) {
         '/wp-json/wp/v2/events/',
         '/wp-json/wp/v2/news',
         '/wp-json/wp/v2/news/',
+        '/wp-json/wp/v2/organisations',
+        '/wp-json/wp/v2/organisations/',
     );
     
     // Polylangが有効な場合、言語プレフィックス付きのパスも追加
@@ -732,6 +734,8 @@ function allow_public_rest_api_access($result) {
             $public_routes[] = '/' . $lang . '/wp-json/wp/v2/events/';
             $public_routes[] = '/' . $lang . '/wp-json/wp/v2/news';
             $public_routes[] = '/' . $lang . '/wp-json/wp/v2/news/';
+            $public_routes[] = '/' . $lang . '/wp-json/wp/v2/organisations';
+            $public_routes[] = '/' . $lang . '/wp-json/wp/v2/organisations/';
         }
     }
     

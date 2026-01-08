@@ -345,6 +345,134 @@ function register_events_json_file_endpoint() {
 add_action('rest_api_init', 'register_events_json_file_endpoint');
 
 /**
+ * タクソノミー「organisation」の一覧を取得するREST APIエンドポイント
+ */
+function register_organisations_api_endpoint() {
+    register_rest_route('wp/v2', '/organisations', array(
+        'methods' => 'GET',
+        'callback' => 'get_multisite_organisations_list',
+        'permission_callback' => '__return_true', // 公開エンドポイント
+    ));
+}
+add_action('rest_api_init', 'register_organisations_api_endpoint');
+
+/**
+ * マルチサイトとサブサイトのorganisationタクソノミー一覧を取得
+ * 同じslugの場合は重複を除去
+ * 言語プレフィックスに基づいて言語別にフィルタリング
+ */
+function get_multisite_organisations_list($request) {
+    $organisations_list = array();
+    $seen_slugs = array(); // 重複チェック用
+    $target_lang = null; // 対象言語
+    
+    // Polylangが有効な場合、リクエストURIから言語コードを取得して設定
+    if (function_exists('pll_languages_list') && function_exists('PLL')) {
+        $request_uri = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
+        
+        // 言語プレフィックス付きのREST APIパスをチェック（/ja/wp-json/、/en/wp-json/など）
+        if (preg_match('/\/([a-z]{2})\/wp-json\//', $request_uri, $matches)) {
+            $lang_code = $matches[1];
+            $languages = pll_languages_list();
+            
+            // 言語コードが有効な言語か確認
+            if (in_array($lang_code, $languages)) {
+                // 現在の言語を設定
+                PLL()->curlang = PLL()->model->get_language($lang_code);
+                $target_lang = $lang_code;
+            }
+        }
+    }
+    
+    // マルチサイトが有効な場合
+    if (is_multisite()) {
+        // すべてのサイトを取得
+        $sites = get_sites(array('number' => 0));
+        
+        foreach ($sites as $site) {
+            switch_to_blog($site->blog_id);
+            
+            // 現在のサイトのorganisationタクソノミーを取得（言語フィルタリング付き）
+            $site_organisations = get_current_site_organisations($target_lang);
+            
+            // 重複チェックしながら追加
+            foreach ($site_organisations as $org) {
+                $slug_lower = strtolower($org['slug']);
+                if (!isset($seen_slugs[$slug_lower])) {
+                    $seen_slugs[$slug_lower] = true;
+                    $organisations_list[] = $org;
+                }
+            }
+            
+            restore_current_blog();
+        }
+    } else {
+        // シングルサイトの場合
+        $site_organisations = get_current_site_organisations($target_lang);
+        foreach ($site_organisations as $org) {
+            $slug_lower = strtolower($org['slug']);
+            if (!isset($seen_slugs[$slug_lower])) {
+                $seen_slugs[$slug_lower] = true;
+                $organisations_list[] = $org;
+            }
+        }
+    }
+    
+    // slugでソート
+    usort($organisations_list, function($a, $b) {
+        return strcmp(strtolower($a['slug']), strtolower($b['slug']));
+    });
+    
+    return new WP_REST_Response($organisations_list, 200);
+}
+
+/**
+ * 現在のサイトのorganisationタクソノミーを取得
+ * 
+ * @param string|null $target_lang 対象言語コード（Polylangが有効な場合）
+ * @return array organisationタクソノミーの配列
+ */
+function get_current_site_organisations($target_lang = null) {
+    $organisations_list = array();
+    
+    // organisationタクソノミーが存在する場合
+    if (taxonomy_exists('organisation')) {
+        // すべてのタームを取得
+        $terms = get_terms(array(
+            'taxonomy' => 'organisation',
+            'hide_empty' => false, // 空のタームも含める
+        ));
+        
+        if (!is_wp_error($terms) && !empty($terms)) {
+            foreach ($terms as $term) {
+                if ($term && !is_wp_error($term)) {
+                    // Polylangが有効で、言語フィルタリングが指定されている場合
+                    if (!empty($target_lang) && function_exists('pll_get_term_language')) {
+                        $term_lang = pll_get_term_language($term->term_id);
+                        // 言語が一致しない場合はスキップ
+                        if ($term_lang !== $target_lang) {
+                            continue;
+                        }
+                    }
+                    
+                    // タームのACFフィールドからcolorを取得
+                    $color = get_taxonomy_term_color($term);
+                    
+                    $organisations_list[] = array(
+                        'id' => $term->term_id,
+                        'name' => $term->name,
+                        'slug' => $term->slug,
+                        'color' => $color,
+                    );
+                }
+            }
+        }
+    }
+    
+    return $organisations_list;
+}
+
+/**
  * JSONファイルとしてイベント一覧を出力
  */
 function get_multisite_events_json_file($request) {
