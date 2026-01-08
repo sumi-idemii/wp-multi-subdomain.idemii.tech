@@ -937,7 +937,9 @@ function handle_polylang_rest_api_template_redirect() {
     $request_uri = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
     
     // 言語プレフィックス付きのREST APIパスをチェック
-    if (preg_match('/\/([a-z]{2})\/wp-json\/(.*)/', $request_uri, $matches)) {
+    // クエリパラメータを除いたパスを取得
+    $request_uri_without_query = strtok($request_uri, '?');
+    if (preg_match('/\/([a-z]{2})\/wp-json\/(.*)/', $request_uri_without_query, $matches)) {
         $lang_code = $matches[1];
         $rest_path = $matches[2];
         
@@ -960,10 +962,19 @@ function handle_polylang_rest_api_template_redirect() {
             }
             
             // REST APIリクエストを作成
-            $request = new WP_REST_Request('GET', $route, $query_params);
+            $request = new WP_REST_Request('GET', $route);
+            // クエリパラメータを設定
+            if (!empty($query_params)) {
+                $request->set_query_params($query_params);
+            }
             
             // REST APIレスポンスを取得
             $response = $rest_server->dispatch($request);
+            
+            // 404エラーの場合は通常の処理に任せる（他のルートにマッチする可能性があるため）
+            if ($response->get_status() === 404) {
+                return;
+            }
             
             // すべての出力をクリア
             if (ob_get_level()) {

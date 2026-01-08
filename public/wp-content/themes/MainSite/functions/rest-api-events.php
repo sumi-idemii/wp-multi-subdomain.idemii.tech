@@ -110,6 +110,13 @@ function register_multisite_events_api_endpoint() {
         'methods' => 'GET',
         'callback' => 'get_multisite_events_list',
         'permission_callback' => '__return_true', // 公開エンドポイント
+        'args' => array(
+            'organisation' => array(
+                'description' => 'organisationタクソノミーのslugでフィルタリング',
+                'type' => 'string',
+                'required' => false,
+            ),
+        ),
     ));
 }
 add_action('rest_api_init', 'register_multisite_events_api_endpoint');
@@ -120,6 +127,12 @@ add_action('rest_api_init', 'register_multisite_events_api_endpoint');
 function get_multisite_events_list($request) {
     $events_list = array();
     
+    // organisationのslugパラメータを取得（小文字に正規化）
+    $organisation_slug = $request->get_param('organisation');
+    if (!empty($organisation_slug)) {
+        $organisation_slug = strtolower(trim($organisation_slug));
+    }
+    
     // マルチサイトが有効な場合
     if (is_multisite()) {
         // すべてのサイトを取得
@@ -128,8 +141,8 @@ function get_multisite_events_list($request) {
         foreach ($sites as $site) {
             switch_to_blog($site->blog_id);
             
-            // 現在のサイトのイベントを取得
-            $site_events = get_current_site_events();
+            // 現在のサイトのイベントを取得（organisationのslugでフィルタリング）
+            $site_events = get_current_site_events($organisation_slug);
             
             // サイト情報を追加
             foreach ($site_events as $event) {
@@ -143,7 +156,7 @@ function get_multisite_events_list($request) {
         }
     } else {
         // シングルサイトの場合
-        $events_list = get_current_site_events();
+        $events_list = get_current_site_events($organisation_slug);
     }
     
     // 日付でソート（新しい順）
@@ -158,11 +171,14 @@ function get_multisite_events_list($request) {
 
 /**
  * 現在のサイトのイベントを取得
+ * 
+ * @param string|null $organisation_slug organisationタクソノミーのslug（オプション）
+ * @return array イベント一覧の配列
  */
-function get_current_site_events() {
+function get_current_site_events($organisation_slug = null) {
     $events_list = array();
     
-    // イベント記事を取得
+    // イベント記事を取得（organisationはACFフィールドとして保存されているため、tax_queryは使用しない）
     $args = array(
         'post_type' => 'events',
         'posts_per_page' => -1,
@@ -236,29 +252,31 @@ function get_current_site_events() {
                 
                 // 組織（organisation）を取得
                 $organisation_field = get_field('organisation', $post_id);
+                $has_matching_organisation = false;
+                
                 if ($organisation_field) {
                     if (is_array($organisation_field)) {
                         foreach ($organisation_field as $org) {
+                            $term = null;
                             if (is_object($org) && ($org instanceof WP_Term || get_class($org) === 'WP_Term')) {
-                                // タームのACFフィールドからcolorを取得
-                                $color = get_taxonomy_term_color($org);
-                                $event_item['organisation'][] = array(
-                                    'id' => $org->term_id,
-                                    'name' => $org->name,
-                                    'slug' => $org->slug,
-                                    'color' => $color,
-                                );
+                                $term = $org;
                             } elseif (is_numeric($org)) {
                                 $term = get_term($org, 'organisation');
-                                if ($term && !is_wp_error($term)) {
-                                    // タームのACFフィールドからcolorを取得
-                                    $color = get_taxonomy_term_color($term);
-                                    $event_item['organisation'][] = array(
-                                        'id' => $term->term_id,
-                                        'name' => $term->name,
-                                        'slug' => $term->slug,
-                                        'color' => $color,
-                                    );
+                            }
+                            
+                            if ($term && !is_wp_error($term)) {
+                                // タームのACFフィールドからcolorを取得
+                                $color = get_taxonomy_term_color($term);
+                                $event_item['organisation'][] = array(
+                                    'id' => $term->term_id,
+                                    'name' => $term->name,
+                                    'slug' => $term->slug,
+                                    'color' => $color,
+                                );
+                                
+                                // organisationのslugでフィルタリング（大文字小文字を区別しない）
+                                if (!empty($organisation_slug) && strtolower($term->slug) === strtolower($organisation_slug)) {
+                                    $has_matching_organisation = true;
                                 }
                             }
                         }
@@ -271,6 +289,11 @@ function get_current_site_events() {
                             'slug' => $organisation_field->slug,
                             'color' => $color,
                         );
+                        
+                        // organisationのslugでフィルタリング
+                        if (!empty($organisation_slug) && $organisation_field->slug === $organisation_slug) {
+                            $has_matching_organisation = true;
+                        }
                     } elseif (is_numeric($organisation_field)) {
                         $term = get_term($organisation_field, 'organisation');
                         if ($term && !is_wp_error($term)) {
@@ -282,9 +305,23 @@ function get_current_site_events() {
                                 'slug' => $term->slug,
                                 'color' => $color,
                             );
+                            
+                            // organisationのslugでフィルタリング
+                            if (!empty($organisation_slug) && $term->slug === $organisation_slug) {
+                                $has_matching_organisation = true;
+                            }
                         }
                     }
                 }
+                
+                // organisationのslugでフィルタリング（ACFフィールドとして保存されているため）
+                if (!empty($organisation_slug) && !$has_matching_organisation) {
+                    // このイベントはスキップ（フィルタリング条件に一致しない）
+                    continue;
+                }
+            } elseif (!empty($organisation_slug)) {
+                // ACFが無効で、organisationのフィルタリングが指定されている場合はスキップ
+                continue;
             }
             
             $events_list[] = $event_item;
