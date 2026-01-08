@@ -203,6 +203,7 @@ function get_current_site_events($organisation_slug = null) {
                 'organisation' => array(),
                 'start_date' => null,
                 'end_date' => null,
+                'schedules' => array(), // 1〜12の日程セット
                 'events_type' => null,
                 'events_venue' => null,
                 'events_target_visitors' => null,
@@ -220,7 +221,7 @@ function get_current_site_events($organisation_slug = null) {
             
             // ACFフィールドを取得
             if (function_exists('get_field')) {
-                // 開始日・終了日
+                // 開始日・終了日（後方互換性のため、最初の日程を保持）
                 $start_date = get_field('events_start_date', $post_id);
                 $end_date = get_field('events_end_date', $post_id);
                 if ($start_date) {
@@ -228,6 +229,35 @@ function get_current_site_events($organisation_slug = null) {
                 }
                 if ($end_date) {
                     $event_item['end_date'] = is_array($end_date) ? $end_date['value'] : $end_date;
+                }
+                
+                // 1〜12までの日程セットを取得
+                $schedules = array();
+                for ($i = 1; $i <= 12; $i++) {
+                    $suffix = '_' . $i;
+                    $schedule_start_date = get_field('events_start_date' . $suffix, $post_id);
+                    $schedule_end_date = get_field('events_end_date' . $suffix, $post_id);
+                    $date_text = get_field('events_date_text' . $suffix, $post_id);
+                    
+                    // 開始日時が存在する場合のみ追加
+                    if (!empty($schedule_start_date)) {
+                        $schedule_item = array(
+                            'start_date' => is_array($schedule_start_date) ? $schedule_start_date['value'] : $schedule_start_date,
+                            'end_date' => null,
+                            'date_text' => $date_text,
+                        );
+                        
+                        if ($schedule_end_date) {
+                            $schedule_item['end_date'] = is_array($schedule_end_date) ? $schedule_end_date['value'] : $schedule_end_date;
+                        }
+                        
+                        $schedules[] = $schedule_item;
+                    }
+                }
+                
+                // 日程セットを追加
+                if (!empty($schedules)) {
+                    $event_item['schedules'] = $schedules;
                 }
                 
                 // イベントタイプ
