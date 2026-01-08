@@ -182,3 +182,21 @@ function reorder_admin_menu_by_custom_order() {
 }
 add_action('admin_menu', 'reorder_admin_menu_by_custom_order', 1000);
 
+/**
+ * related_site投稿タイプの一覧ページ・詳細ページをトップページにリダイレクト
+ * 投稿の一覧ページ・詳細ページを持たない投稿タイプのリダイレクト処理
+ */
+function redirect_related_site_pages() {
+    // 管理画面では実行しない
+    if (is_admin()) {
+        return;
+    }
+    
+    // related_site投稿タイプのアーカイブページまたは詳細ページの場合
+    if (is_post_type_archive('related_site') || is_singular('related_site')) {
+        wp_redirect(home_url(), 301);
+        exit;
+    }
+}
+add_action('template_redirect', 'redirect_related_site_pages', 1);
+

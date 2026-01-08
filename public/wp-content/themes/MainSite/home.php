@@ -47,6 +47,10 @@ get_header();
     // トップページカテゴリ紹介エリア（setting_no: 4）
     get_template_part('template-parts/home', 'top-category-area', array('setting_no' => 4));
     ?>
+    <?php
+    // トップページ関連サイト紹介エリア
+    get_template_part('template-parts/home', 'related-site');
+    ?>
 </main>
 
 <?php

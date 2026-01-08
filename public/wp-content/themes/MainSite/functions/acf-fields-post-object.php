@@ -25,9 +25,14 @@ add_action('wp_ajax_acf/fields/post_object/query', function() {
     
     // フィールド名またはフィールドキーで判定
     $is_target_field = false;
+    $field = null;
     
     if ( $field_name === 'select_allsite_post' ) {
         $is_target_field = true;
+        // フィールドキーからフィールドを取得
+        if ( ! empty( $field_key ) && function_exists( 'acf_get_field' ) ) {
+            $field = acf_get_field( $field_key );
+        }
     } elseif ( ! empty( $field_key ) && function_exists( 'acf_get_field' ) ) {
         // フィールドキーからフィールドを取得して確認
         $field = acf_get_field( $field_key );
@@ -49,6 +54,30 @@ add_action('wp_ajax_acf/fields/post_object/query', function() {
     // マルチサイトでない場合は通常の処理を続行
     if ( ! is_multisite() ) {
         return;
+    }
+    
+    // ACFフィールド設定から投稿タイプと投稿ステータスを取得
+    $post_types = array();
+    $post_statuses = array();
+    
+    if ( $field ) {
+        // 投稿タイプの設定を取得
+        if ( isset( $field['post_type'] ) && ! empty( $field['post_type'] ) ) {
+            $post_types = is_array( $field['post_type'] ) ? $field['post_type'] : array( $field['post_type'] );
+        }
+        
+        // 投稿ステータスの設定を取得
+        if ( isset( $field['post_status'] ) && ! empty( $field['post_status'] ) ) {
+            $post_statuses = is_array( $field['post_status'] ) ? $field['post_status'] : array( $field['post_status'] );
+        }
+    }
+    
+    // デフォルト値（設定がない場合）
+    if ( empty( $post_types ) ) {
+        $post_types = array( 'news' ); // デフォルトはnews
+    }
+    if ( empty( $post_statuses ) ) {
+        $post_statuses = array( 'publish' ); // デフォルトは公開済み
     }
     
     // 検索キーワードを取得
@@ -76,11 +105,11 @@ add_action('wp_ajax_acf/fields/post_object/query', function() {
         // 対象のサブサイトに切り替え
         switch_to_blog( $blog_id );
         
-        // news投稿を取得（公開済みの投稿のみ）
+        // ACFフィールド設定に基づいて投稿を取得
         $query_args = array(
-            'post_type'      => 'news',
+            'post_type'      => $post_types,
             'posts_per_page' => 20, // AJAX検索では件数を制限
-            'post_status'    => 'publish', // 公開済みの投稿のみ
+            'post_status'    => $post_statuses,
             'paged'          => $paged,
         );
         
@@ -94,8 +123,8 @@ add_action('wp_ajax_acf/fields/post_object/query', function() {
         if ( $site_posts ) {
             $site_name = get_bloginfo( 'name' );
             foreach ( $site_posts as $post ) {
-                // 公開済みの投稿のみを追加（念のため再確認）
-                if ( $post->post_status === 'publish' ) {
+                // 投稿ステータスを再確認（ACFフィールド設定に基づく）
+                if ( in_array( $post->post_status, $post_statuses ) ) {
                     $composite_id = $blog_id . '_' . $post->ID;
                     // 投稿日を取得（日本語形式）
                     $post_date = get_the_date( 'Y年n月j日', $post->ID );
@@ -135,17 +164,27 @@ add_filter('acf/fields/post_object/query/name=select_allsite_post', function( $a
         return $args;
     }
     
-    // マルチサイトでない場合は通常のクエリを返す
-    if ( ! is_multisite() ) {
-        // news投稿タイプのみに限定
+    // ACFフィールド設定から投稿タイプを取得
+    if ( isset( $field['post_type'] ) && ! empty( $field['post_type'] ) ) {
+        $post_types = is_array( $field['post_type'] ) ? $field['post_type'] : array( $field['post_type'] );
+        $args['post_type'] = $post_types;
+    } else {
+        // デフォルト値（設定がない場合）
         if ( ! isset( $args['post_type'] ) || empty( $args['post_type'] ) ) {
             $args['post_type'] = 'news';
         }
-        return $args;
     }
     
-    // news投稿タイプのみに限定
-    $args['post_type'] = 'news';
+    // ACFフィールド設定から投稿ステータスを取得
+    if ( isset( $field['post_status'] ) && ! empty( $field['post_status'] ) ) {
+        $post_statuses = is_array( $field['post_status'] ) ? $field['post_status'] : array( $field['post_status'] );
+        $args['post_status'] = $post_statuses;
+    } else {
+        // デフォルト値（設定がない場合）
+        if ( ! isset( $args['post_status'] ) || empty( $args['post_status'] ) ) {
+            $args['post_status'] = 'publish';
+        }
+    }
     
     return $args;
 }, 10, 3);
@@ -266,8 +305,14 @@ add_filter('acf/format_value/type=post_object', function( $value, $post_id, $fie
                         $post_obj = get_post( $post_id_value );
                         restore_current_blog();
                         
-                        // 公開済みの投稿のみを返す
-                        if ( $post_obj && $post_obj->post_status === 'publish' ) {
+                        // ACFフィールド設定の投稿ステータスを確認
+                        $allowed_statuses = array( 'publish' ); // デフォルト
+                        if ( isset( $field['post_status'] ) && ! empty( $field['post_status'] ) ) {
+                            $allowed_statuses = is_array( $field['post_status'] ) ? $field['post_status'] : array( $field['post_status'] );
+                        }
+                        
+                        // 設定された投稿ステータスの投稿のみを返す
+                        if ( $post_obj && in_array( $post_obj->post_status, $allowed_statuses ) ) {
                             // blog_idプロパティを追加（保存時に使用）
                             $post_obj->blog_id = $blog_id;
                             $result[] = $post_obj;
@@ -280,14 +325,26 @@ add_filter('acf/format_value/type=post_object', function( $value, $post_id, $fie
                     $post_obj = get_post( $post_id_value );
                     restore_current_blog();
                     
-                    if ( $post_obj && $post_obj->post_status === 'publish' ) {
+                    // ACFフィールド設定の投稿ステータスを確認
+                    $allowed_statuses = array( 'publish' ); // デフォルト
+                    if ( isset( $field['post_status'] ) && ! empty( $field['post_status'] ) ) {
+                        $allowed_statuses = is_array( $field['post_status'] ) ? $field['post_status'] : array( $field['post_status'] );
+                    }
+                    
+                    if ( $post_obj && in_array( $post_obj->post_status, $allowed_statuses ) ) {
                         $post_obj->blog_id = $current_blog_id;
                         $result[] = $post_obj;
                     }
                 }
             } elseif ( is_object( $item ) && isset( $item->ID ) ) {
                 // 既に投稿オブジェクトの場合はそのまま
-                if ( $item->post_status === 'publish' ) {
+                // ACFフィールド設定の投稿ステータスを確認
+                $allowed_statuses = array( 'publish' ); // デフォルト
+                if ( isset( $field['post_status'] ) && ! empty( $field['post_status'] ) ) {
+                    $allowed_statuses = is_array( $field['post_status'] ) ? $field['post_status'] : array( $field['post_status'] );
+                }
+                
+                if ( in_array( $item->post_status, $allowed_statuses ) ) {
                     $result[] = $item;
                 }
             }
@@ -329,8 +386,14 @@ add_filter('acf/format_value/type=post_object', function( $value, $post_id, $fie
                 $post_obj = get_post( $post_id_value );
                 restore_current_blog();
                 
-                // 公開済みの投稿のみを返す
-                if ( $post_obj && $post_obj->post_status === 'publish' ) {
+                // ACFフィールド設定の投稿ステータスを確認
+                $allowed_statuses = array( 'publish' ); // デフォルト
+                if ( isset( $field['post_status'] ) && ! empty( $field['post_status'] ) ) {
+                    $allowed_statuses = is_array( $field['post_status'] ) ? $field['post_status'] : array( $field['post_status'] );
+                }
+                
+                // 設定された投稿ステータスの投稿のみを返す
+                if ( $post_obj && in_array( $post_obj->post_status, $allowed_statuses ) ) {
                     // blog_idプロパティを追加（保存時に使用）
                     $post_obj->blog_id = $blog_id;
                     return $post_obj;
@@ -343,7 +406,13 @@ add_filter('acf/format_value/type=post_object', function( $value, $post_id, $fie
             $post_obj = get_post( $post_id_value );
             restore_current_blog();
             
-            if ( $post_obj && $post_obj->post_status === 'publish' ) {
+            // ACFフィールド設定の投稿ステータスを確認
+            $allowed_statuses = array( 'publish' ); // デフォルト
+            if ( isset( $field['post_status'] ) && ! empty( $field['post_status'] ) ) {
+                $allowed_statuses = is_array( $field['post_status'] ) ? $field['post_status'] : array( $field['post_status'] );
+            }
+            
+            if ( $post_obj && in_array( $post_obj->post_status, $allowed_statuses ) ) {
                 $post_obj->blog_id = $current_blog_id;
                 return $post_obj;
             }
@@ -354,7 +423,13 @@ add_filter('acf/format_value/type=post_object', function( $value, $post_id, $fie
     
     // 値が投稿オブジェクトの場合はそのまま返す
     if ( is_object( $value ) && isset( $value->ID ) ) {
-        if ( $value->post_status === 'publish' ) {
+        // ACFフィールド設定の投稿ステータスを確認
+        $allowed_statuses = array( 'publish' ); // デフォルト
+        if ( isset( $field['post_status'] ) && ! empty( $field['post_status'] ) ) {
+            $allowed_statuses = is_array( $field['post_status'] ) ? $field['post_status'] : array( $field['post_status'] );
+        }
+        
+        if ( in_array( $value->post_status, $allowed_statuses ) ) {
             return $value;
         }
         return null;
