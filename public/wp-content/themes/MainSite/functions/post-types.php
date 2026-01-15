@@ -205,7 +205,12 @@ function reorder_admin_menu_by_custom_order() {
         $ordered_menu[] = $item['menu'];
     }
     
-    // (5) その他のメニュー
+    // (5) 組織設定メニューを追加
+    if ($organisation_setting_menu !== null) {
+        $ordered_menu[] = $organisation_setting_menu;
+    }
+    
+    // (6) その他のメニュー
     foreach ($other_menus as $menu_item) {
         $ordered_menu[] = $menu_item;
     }
