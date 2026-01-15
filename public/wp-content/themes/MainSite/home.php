@@ -25,7 +25,7 @@ get_header();
     ?>
     <?php
     // トップピックアップ
-    get_template_part('template-parts/home', 'top-pickup');
+    get_template_part('template-parts/home', 'pickup');
     ?>
     <?php
     // イベント
@@ -33,19 +33,19 @@ get_header();
     ?>
     <?php
     // トップページカテゴリ紹介エリア（setting_no: 1）
-    get_template_part('template-parts/home', 'top-category-area', array('setting_no' => 1));
+    get_template_part('template-parts/home', 'category-area', array('setting_no' => 1));
     ?>
     <?php
     // トップページカテゴリ紹介エリア（setting_no: 2）
-    get_template_part('template-parts/home', 'top-category-area', array('setting_no' => 2));
+    get_template_part('template-parts/home', 'category-area', array('setting_no' => 2));
     ?>
     <?php
     // トップページカテゴリ紹介エリア（setting_no: 3）
-    get_template_part('template-parts/home', 'top-category-area', array('setting_no' => 3));
+    get_template_part('template-parts/home', 'category-area', array('setting_no' => 3));
     ?>
     <?php
     // トップページカテゴリ紹介エリア（setting_no: 4）
-    get_template_part('template-parts/home', 'top-category-area', array('setting_no' => 4));
+    get_template_part('template-parts/home', 'category-area', array('setting_no' => 4));
     ?>
     <?php
     // トップページ関連サイト紹介エリア

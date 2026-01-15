@@ -103,7 +103,9 @@ function reorder_admin_menu_by_custom_order() {
     $ordered_menu = array();
     $dashboard_menu = null;
     $page_menu = null;
+    $top_news_menu = null; // トップページニュース管理メニュー
     $acf_post_type_menus = array();
+    $organisation_setting_menu = null; // 組織設定メニュー
     $other_menus = array();
     
     // 既存のメニューを分類
@@ -128,10 +130,36 @@ function reorder_admin_menu_by_custom_order() {
                 continue;
             }
             
-            // (3) ACFの投稿タイプのメニューかチェック
-            // edit.php?post_type=xxx 形式のメニューか確認
+            // トップページニュース管理メニューを取得
+            // 親メニュー（top-page-news-management）のみを取得
+            if ($menu_slug === 'top-page-news-management') {
+                $top_news_menu = $menu_item;
+                continue;
+            }
+            
+            // サブメニューは除外（親メニューのみを処理）
+            if (strpos($menu_slug, 'page-category-news-') === 0 || 
+                $menu_slug === 'top-page-announcements-management' ||
+                $menu_slug === 'top-page-events-management') {
+                continue;
+            }
+            
+            // 組織設定メニューを取得（メニュータイトルまたは投稿タイプ名で判定）
             if (strpos($menu_slug, 'edit.php?post_type=') === 0) {
                 $post_type = str_replace('edit.php?post_type=', '', $menu_slug);
+                
+                // メニュータイトルで「組織設定」を検索
+                $menu_title = isset($menu_item[0]) ? $menu_item[0] : '';
+                if (strpos($menu_title, '組織設定') !== false) {
+                    $organisation_setting_menu = $menu_item;
+                    continue;
+                }
+                
+                // 組織設定関連の投稿タイプかチェック
+                if (strpos($post_type, 'organisation') !== false || strpos($post_type, 'organization') !== false) {
+                    $organisation_setting_menu = $menu_item;
+                    continue;
+                }
                 
                 // ACFの投稿タイプの順序に含まれている投稿タイプかチェック
                 if (in_array($post_type, $acf_post_types)) {
@@ -167,12 +195,17 @@ function reorder_admin_menu_by_custom_order() {
         $ordered_menu[] = $page_menu;
     }
     
-    // (3) ACFの投稿タイプのメニューをACFの投稿タイプの順序で追加
+    // (3) トップページニュース管理（固定ページの下）
+    if ($top_news_menu !== null) {
+        $ordered_menu[] = $top_news_menu;
+    }
+    
+    // (4) ACFの投稿タイプのメニューをACFの投稿タイプの順序で追加
     foreach ($acf_post_type_menus as $item) {
         $ordered_menu[] = $item['menu'];
     }
     
-    // (4) その他のメニュー
+    // (5) その他のメニュー
     foreach ($other_menus as $menu_item) {
         $ordered_menu[] = $menu_item;
     }
