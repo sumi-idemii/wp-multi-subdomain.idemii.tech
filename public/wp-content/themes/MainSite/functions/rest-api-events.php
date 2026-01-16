@@ -201,6 +201,7 @@ function get_current_site_events($organisation_slug = null) {
                 'date' => get_the_date('c'),
                 'featured_image' => null,
                 'organisation' => array(),
+                'page_category' => array(),
                 'start_date' => null,
                 'end_date' => null,
                 'schedules' => array(), // 1〜12の日程セット
@@ -217,6 +218,20 @@ function get_current_site_events($organisation_slug = null) {
                     'id' => $thumbnail_id,
                     'url' => $thumbnail_url,
                 );
+            }
+            
+            // ページカテゴリ（page_category）を取得
+            if (taxonomy_exists('page_category')) {
+                $page_categories = get_the_terms($post_id, 'page_category');
+                if ($page_categories && !is_wp_error($page_categories)) {
+                    foreach ($page_categories as $category) {
+                        $event_item['page_category'][] = array(
+                            'id' => $category->term_id,
+                            'name' => $category->name,
+                            'slug' => $category->slug,
+                        );
+                    }
+                }
             }
             
             // ACFフィールドを取得
