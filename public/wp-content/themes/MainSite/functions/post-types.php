@@ -106,6 +106,7 @@ function reorder_admin_menu_by_custom_order() {
     $top_news_menu = null; // トップページニュース管理メニュー
     $acf_post_type_menus = array();
     $organisation_setting_menu = null; // 組織設定メニュー
+    $site_info_menu = null; // サイト情報管理メニュー
     $other_menus = array();
     
     // 既存のメニューを分類
@@ -141,6 +142,12 @@ function reorder_admin_menu_by_custom_order() {
             if (strpos($menu_slug, 'page-category-news-') === 0 || 
                 $menu_slug === 'top-page-announcements-management' ||
                 $menu_slug === 'top-page-events-management') {
+                continue;
+            }
+            
+            // サイト情報管理メニューを取得
+            if ($menu_slug === 'site-info-management') {
+                $site_info_menu = $menu_item;
                 continue;
             }
             
@@ -210,7 +217,12 @@ function reorder_admin_menu_by_custom_order() {
         $ordered_menu[] = $organisation_setting_menu;
     }
     
-    // (6) その他のメニュー
+    // (6) サイト情報管理メニューを追加
+    if ($site_info_menu !== null) {
+        $ordered_menu[] = $site_info_menu;
+    }
+    
+    // (7) その他のメニュー
     foreach ($other_menus as $menu_item) {
         $ordered_menu[] = $menu_item;
     }

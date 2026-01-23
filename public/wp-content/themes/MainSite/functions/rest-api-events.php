@@ -208,6 +208,7 @@ function get_current_site_events($organisation_slug = null) {
                 'events_type' => null,
                 'events_venue' => null,
                 'events_target_visitors' => null,
+                'related_url' => null,
             );
             
             // キャッチ画像を取得
@@ -293,6 +294,12 @@ function get_current_site_events($organisation_slug = null) {
                 if ($events_target_visitors) {
                     // 改行を<br>に変換
                     $event_item['events_target_visitors'] = is_string($events_target_visitors) ? str_replace(array("\r\n", "\n", "\r"), '<br>', $events_target_visitors) : $events_target_visitors;
+                }
+                
+                // 関連URL
+                $related_url = get_field('related_url', $post_id);
+                if ($related_url) {
+                    $event_item['related_url'] = is_string($related_url) ? $related_url : $related_url;
                 }
                 
                 // 組織（organisation）を取得
