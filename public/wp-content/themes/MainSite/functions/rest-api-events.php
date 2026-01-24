@@ -209,6 +209,7 @@ function get_current_site_events($organisation_slug = null) {
                 'events_venue' => null,
                 'events_target_visitors' => null,
                 'related_url' => null,
+                'events_language' => null,
             );
             
             // キャッチ画像を取得
@@ -300,6 +301,13 @@ function get_current_site_events($organisation_slug = null) {
                 $related_url = get_field('related_url', $post_id);
                 if ($related_url) {
                     $event_item['related_url'] = is_string($related_url) ? $related_url : $related_url;
+                }
+                
+                // 使用言語
+                $events_language = get_field('events_language', $post_id);
+                if ($events_language) {
+                    // チェックボックス形式なので配列の可能性がある
+                    $event_item['events_language'] = is_array($events_language) ? $events_language : array($events_language);
                 }
                 
                 // 組織（organisation）を取得
