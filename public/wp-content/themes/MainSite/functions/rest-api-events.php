@@ -307,7 +307,28 @@ function get_current_site_events($organisation_slug = null) {
                 $events_language = get_field('events_language', $post_id);
                 if ($events_language) {
                     // チェックボックス形式なので配列の可能性がある
-                    $event_item['events_language'] = is_array($events_language) ? $events_language : array($events_language);
+                    $events_language_array = is_array($events_language) ? $events_language : array($events_language);
+                    
+                    // リクエストURIから言語コードを取得（/en/ または /ja/）
+                    $request_uri = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
+                    $is_english_site = false;
+                    
+                    // 英語サイト（/en/wp-json/）の場合
+                    if (preg_match('/\/en\/wp-json\//', $request_uri)) {
+                        $is_english_site = true;
+                    }
+                    
+                    // 英語サイトの場合は「日本語」を「Japanese」に変換
+                    if ($is_english_site) {
+                        $events_language_array = array_map(function($lang) {
+                            if ($lang === '日本語') {
+                                return 'Japanese';
+                            }
+                            return $lang;
+                        }, $events_language_array);
+                    }
+                    
+                    $event_item['events_language'] = $events_language_array;
                 }
                 
                 // 組織（organisation）を取得
