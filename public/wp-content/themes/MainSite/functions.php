@@ -193,6 +193,7 @@ add_action('pre_get_posts', 'custom_posts_per_page');
 $required_files = [
     'post-types.php',    // 投稿タイプの定義（他のファイルで使用される）
     'taxonomy.php',    // 投稿タイプの定義（他のファイルで使用される）
+    'rest-api.php',    // REST APIの基本関数（rest-api-events.phpで使用される）
 ];
 
 // 指定した順序でファイルを読み込む
